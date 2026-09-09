@@ -3,7 +3,7 @@ import { createRoot } from 'react-dom/client'
 import { BrowserRouter, HashRouter } from 'react-router-dom'
 import { registerSW } from 'virtual:pwa-register'
 import App from './App'
-import { db } from './db/db'
+import { db, onDbBlocked } from './db/db'
 import './styles.css'
 
 /**
@@ -50,11 +50,44 @@ function DbError({ error }: { error: unknown }) {
   )
 }
 
+/** Aviso enquanto outra aba/janela do app segura o banco durante uma atualização. */
+function DbBlocked() {
+  return (
+    <main className="app-main">
+      <h1>Atualizando o app…</h1>
+      <p className="muted" style={{ margin: '12px 0' }}>
+        Outra aba ou janela do Vinil ainda está aberta com a versão antiga. Feche as outras abas (ou espere alguns
+        segundos: elas recarregam sozinhas) e esta tela segue automaticamente.
+      </p>
+      <div className="btn-row">
+        <button className="btn primary" onClick={() => window.location.reload()}>
+          Recarregar
+        </button>
+      </div>
+    </main>
+  )
+}
+
 // Abre o banco antes de mostrar o app: se a migração falhar, mostra o erro
-// em vez de deixar tudo em "Carregando…" para sempre.
+// em vez de deixar tudo em "Carregando…" para sempre; se outra aba estiver
+// segurando o banco, explica o que fazer.
+let opened = false
+const stopBlocked = onDbBlocked(() => {
+  if (!opened) root.render(<DbBlocked />)
+})
+const slowTimer = setTimeout(() => {
+  if (!opened) root.render(<DbBlocked />)
+}, 6000)
+
 db.open()
-  .then(() => root.render(<StrictMode>{router}</StrictMode>))
+  .then(() => {
+    opened = true
+    clearTimeout(slowTimer)
+    stopBlocked()
+    root.render(<StrictMode>{router}</StrictMode>)
+  })
   .catch((error: unknown) => {
+    clearTimeout(slowTimer)
     console.error('Falha ao abrir o banco local', error)
     root.render(<DbError error={error} />)
   })

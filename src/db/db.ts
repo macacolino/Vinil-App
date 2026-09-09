@@ -158,6 +158,30 @@ export function syncTransaction<T>(tables: Dexie.Table[], fn: () => Promise<T>):
 
 export const db = new VinilDB()
 
+/**
+ * Várias abas/janelas do app abertas ao mesmo tempo:
+ * - "versionchange": outra aba (com versão mais nova do app) quer atualizar o
+ *   banco. Esta aba fecha a conexão e recarrega, para não segurar a atualização
+ *   nem continuar rodando código antigo.
+ * - "blocked": esta aba quer atualizar, mas outra ainda segura o banco. Avisa
+ *   quem estiver ouvindo (a tela de abertura mostra a instrução).
+ */
+db.on('versionchange', () => {
+  db.close()
+  window.location.reload()
+  return false
+})
+
+type BlockedListener = (blocked: boolean) => void
+const blockedListeners = new Set<BlockedListener>()
+export function onDbBlocked(l: BlockedListener): () => void {
+  blockedListeners.add(l)
+  return () => blockedListeners.delete(l)
+}
+db.on('blocked', () => {
+  blockedListeners.forEach((l) => l(true))
+})
+
 /** Chaves usadas na tabela settings. */
 export const SETTINGS = {
   usdToBrl: 'usdToBrl',

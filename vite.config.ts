@@ -49,7 +49,7 @@ export default defineConfig({
             options: {
               cacheName: 'capas',
               expiration: { maxEntries: 500, maxAgeSeconds: 60 * 60 * 24 * 365 },
-              cacheableResponse: { statuses: [0, 200] },
+              cacheableResponse: { statuses: [200] },
             },
           },
         ],

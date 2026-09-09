@@ -20,7 +20,9 @@ export function Cover({ src, alt, size = 'normal' }: Props) {
   }
   return (
     <div className={cls}>
-      <img src={src} alt={alt} loading="lazy" onError={() => setFailed(true)} />
+      {/* crossOrigin: os servidores de capa permitem CORS, e assim o cache offline
+          guarda só respostas boas (sem CORS, um erro vira resposta "opaca" e poderia ficar em cache). */}
+      <img src={src} alt={alt} loading="lazy" crossOrigin="anonymous" onError={() => setFailed(true)} />
     </div>
   )
 }
