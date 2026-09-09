@@ -92,9 +92,19 @@ forma simples quando fizer sentido.
 - **Fase 3 (concluída)**: preço estimado e raridade automáticos via Discogs,
   sem chave: MusicBrainz (`inc=url-rels`) dá o "master" do Discogs (ou busca
   por artista+título), `masters/{id}/versions?format=Vinyl` lista as edições
-  em vinil e a mais colecionada vira referência; `marketplace/stats/{release}
-  ?curr_abbr=USD` dá menor anúncio e quantidade à venda. Raridade =
-  heurística em `lib/pricing.ts` (coleções no Discogs, à venda, preço).
+  em vinil e a mais colecionada vira referência (pulando edições
+  `blocked_from_sale`); `marketplace/stats/{release}?curr_abbr=USD` dá menor
+  anúncio e quantidade à venda. O master vem primeiro da **busca do Discogs**
+  (`database/search` type=master, o candidato oficial mais colecionado cujo
+  título bate), porque o link do MusicBrainz pode apontar para uma página
+  secundária (Killers → master 14360, bloqueado, em vez de 4068163). Raridade
+  = heurística em `lib/pricing.ts` (coleções no Discogs, à venda, preço);
+  `PRICING_ALGO` força reconsulta quando a regra muda. Foto do artista:
+  `artists/{id}` do Discogs (id via MusicBrainz url-rels ou busca), guardada em
+  `Artist.imageUrl`; o usuário pode pôr uma URL própria (`imageSource` manual).
+  Miniatura do Discogs (`discogsThumb`) serve de reserva para a capa; cards
+  usam `front-250` do Cover Art Archive. `i.discogs.com` NÃO envia CORS: o
+  componente `Cover` só usa `crossOrigin` nos hosts que respondem CORS.
   Valores editados à mão (`priceSource`/`raritySource` = manual) não são
   sobrescritos. Reconsulta a cada 30 dias. Limite do Discogs: 25/min, fila em
   `lib/discogs.ts`. Tarefa `prices` em `jobs.ts`, encadeada após as faixas.

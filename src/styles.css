@@ -375,3 +375,8 @@ p { margin: 0; }
 .job .progress { margin-top: 5px; }
 .job-done { background: var(--ok-soft); }
 .job-error { background: var(--accent-soft); }
+
+.artist-header { align-items: center; }
+.artist-photo { width: 84px; flex: none; }
+.artist-photo .cover { border-radius: 12px; font-size: 1.6rem; }
+.list-item .cover.small { border-radius: 8px; }

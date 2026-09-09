@@ -365,6 +365,16 @@ export async function fetchDiscogsMasterId(releaseGroupMbid: string, priority: P
   return null
 }
 
+/** Id do artista no Discogs ligado a este artista no MusicBrainz, se houver. */
+export async function fetchArtistDiscogsId(artistMbid: string, priority: Priority = 'high'): Promise<number | null> {
+  const data = await mbGet<MBUrlRelsResponse>(`artist/${artistMbid}`, { inc: 'url-rels' }, { priority })
+  for (const rel of data.relations ?? []) {
+    const m = rel.url?.resource?.match(/discogs\.com\/artist\/(\d+)/)
+    if (m) return Number(m[1])
+  }
+  return null
+}
+
 /** Nome do país em português para os códigos mais comuns. */
 export function countryName(code: string | undefined): string | undefined {
   if (!code) return undefined

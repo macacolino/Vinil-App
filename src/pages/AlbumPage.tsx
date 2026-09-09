@@ -12,7 +12,7 @@ import { ALBUM_TYPE_LABEL, GRADE_LABEL, type Album, type AlbumStatus } from '../
 import { formatBRL, formatDate, formatDuration, formatUSD, useUsdToBrl } from '../lib/format'
 import { loadAlbumTracks, needsTracks } from '../lib/importArtist'
 import { needsPricing, updateAlbumPricing } from '../lib/pricing'
-import { releaseUrl } from '../lib/discogs'
+import { masterUrl, releaseUrl } from '../lib/discogs'
 import { RARITY_LABEL } from '../db/types'
 
 export function AlbumPage() {
@@ -136,7 +136,7 @@ export function AlbumPage() {
         </div>
       ) : (
         <>
-          <Cover src={album.coverUrl} alt={album.title} size="large" />
+          <Cover src={album.coverUrl} fallbackSrc={album.discogsThumb} alt={album.title} size="large" />
           <div className="page-title" style={{ marginTop: 16 }}>
             <div>
               <h1>{album.title}</h1>
@@ -192,12 +192,20 @@ export function AlbumPage() {
                 ) : album.discogsReleaseId ? (
                   <>
                     <a href={releaseUrl(album.discogsReleaseId)} target="_blank" rel="noreferrer" style={{ textDecoration: 'underline' }}>
-                      {album.discogsForSale ?? 0} à venda
+                      {album.discogsBlocked ? 'edição bloqueada para venda' : `${album.discogsForSale ?? 0} à venda`}
                     </a>
                     <span className="muted">
                       {album.discogsInCollection != null ? ` · ${album.discogsInCollection.toLocaleString('pt-BR')} coleções` : ''}
                       {album.discogsCheckedAt ? ` · ${formatDate(new Date(album.discogsCheckedAt).toISOString().slice(0, 10))}` : ''}
                     </span>
+                    {album.discogsMasterId && (
+                      <>
+                        {' · '}
+                        <a href={masterUrl(album.discogsMasterId)} target="_blank" rel="noreferrer" className="muted" style={{ textDecoration: 'underline' }}>
+                          todas as edições
+                        </a>
+                      </>
+                    )}
                   </>
                 ) : priceState === 'error' ? (
                   <span className="muted">{priceError}</span>

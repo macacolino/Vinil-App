@@ -126,27 +126,64 @@ export async function fetchVinylVersions(masterId: number, priority: Priority = 
 export interface DiscogsStats {
   numForSale: number
   lowestUsd?: number
+  blocked: boolean
 }
 
 /** Quantos anúncios e o menor preço (em dólar) de uma edição específica. */
 export async function fetchStats(releaseId: number, priority: Priority = 'high'): Promise<DiscogsStats> {
-  const data = await dgGet<{ num_for_sale?: number; lowest_price?: { value?: number; currency?: string } | null }>(
+  const data = await dgGet<{ num_for_sale?: number; lowest_price?: { value?: number; currency?: string } | null; blocked_from_sale?: boolean }>(
     `marketplace/stats/${releaseId}`,
     { curr_abbr: 'USD' },
     priority,
   )
-  return { numForSale: data.num_for_sale ?? 0, lowestUsd: data.lowest_price?.value ?? undefined }
+  return { numForSale: data.num_for_sale ?? 0, lowestUsd: data.lowest_price?.value ?? undefined, blocked: !!data.blocked_from_sale }
 }
 
-/** Procura o "master" de um álbum pelo nome do artista e título (quando o MusicBrainz não tem o link). */
-export async function searchMaster(artist: string, title: string, priority: Priority = 'high'): Promise<number | null> {
-  const data = await dgGet<{ results?: { master_id?: number; type?: string }[] }>(
-    'database/search',
-    { type: 'master', artist, release_title: title, format: 'Vinyl', per_page: '5' },
-    priority,
-  )
-  const hit = data.results?.find((r) => r.master_id)
-  return hit?.master_id ?? null
+export interface MasterCandidate {
+  masterId: number
+  title: string
+  year?: number
+  have: number
+  want: number
+  unofficial: boolean
+}
+
+/** Candidatos a "master" de um álbum na busca do Discogs (só vinil), com quantas pessoas têm cada um. */
+export async function searchMasters(artist: string, title: string, priority: Priority = 'high'): Promise<MasterCandidate[]> {
+  const data = await dgGet<{
+    results?: { master_id?: number; title?: string; year?: string; format?: string[]; community?: { have?: number; want?: number } }[]
+  }>('database/search', { type: 'master', artist, release_title: title, format: 'Vinyl', per_page: '10' }, priority)
+  const seen = new Set<number>()
+  const out: MasterCandidate[] = []
+  for (const r of data.results ?? []) {
+    if (!r.master_id || seen.has(r.master_id)) continue
+    seen.add(r.master_id)
+    out.push({
+      masterId: r.master_id,
+      title: r.title ?? '',
+      year: r.year ? Number.parseInt(r.year, 10) || undefined : undefined,
+      have: r.community?.have ?? 0,
+      want: r.community?.want ?? 0,
+      unofficial: (r.format ?? []).some((f) => /unofficial/i.test(f)),
+    })
+  }
+  return out
+}
+
+/** Id do artista no Discogs pela busca por nome. */
+export async function searchArtist(name: string, priority: Priority = 'high'): Promise<number | null> {
+  const data = await dgGet<{ results?: { id?: number; title?: string }[] }>('database/search', { type: 'artist', q: name, per_page: '5' }, priority)
+  const norm = (t: string) => t.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]/g, '')
+  const exact = data.results?.find((r) => r.id && r.title && norm(r.title) === norm(name))
+  return (exact ?? data.results?.find((r) => r.id))?.id ?? null
+}
+
+/** Foto principal do artista no Discogs (URL de ~600 px), ou null. */
+export async function fetchArtistImage(discogsArtistId: number, priority: Priority = 'high'): Promise<string | null> {
+  const data = await dgGet<{ images?: { type?: string; uri?: string; uri150?: string }[] }>(`artists/${discogsArtistId}`, {}, priority)
+  const images = data.images ?? []
+  const primary = images.find((i) => i.type === 'primary') ?? images[0]
+  return primary?.uri ?? primary?.uri150 ?? null
 }
 
 export function masterUrl(masterId: number): string {

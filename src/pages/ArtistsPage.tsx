@@ -2,6 +2,7 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { ArtistSearch } from '../components/ArtistSearch'
+import { Cover } from '../components/Cover'
 import { db } from '../db/db'
 
 export function ArtistsPage() {
@@ -62,6 +63,7 @@ export function ArtistsPage() {
         <div className="list">
           {rows.map(({ artist, total, have, want }) => (
             <Link key={artist.id} to={`/artistas/${artist.id}`} className="list-item">
+              <Cover src={artist.imageUrl} alt={artist.name} size="small" />
               <div className="grow">
                 <div className="name">{artist.name}</div>
                 <div className="meta">

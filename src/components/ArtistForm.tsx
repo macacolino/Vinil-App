@@ -3,7 +3,7 @@ import type { Artist } from '../db/types'
 
 interface Props {
   initial?: Artist
-  onSave: (data: Pick<Artist, 'name' | 'country' | 'notes'>) => Promise<void> | void
+  onSave: (data: Pick<Artist, 'name' | 'country' | 'notes' | 'imageUrl' | 'imageSource'>) => Promise<void> | void
   onCancel: () => void
 }
 
@@ -11,6 +11,7 @@ export function ArtistForm({ initial, onSave, onCancel }: Props) {
   const [name, setName] = useState(initial?.name ?? '')
   const [country, setCountry] = useState(initial?.country ?? '')
   const [notes, setNotes] = useState(initial?.notes ?? '')
+  const [imageUrl, setImageUrl] = useState(initial?.imageUrl ?? '')
   const [saving, setSaving] = useState(false)
 
   async function submit(e: FormEvent) {
@@ -18,7 +19,15 @@ export function ArtistForm({ initial, onSave, onCancel }: Props) {
     if (!name.trim()) return
     setSaving(true)
     try {
-      await onSave({ name: name.trim(), country: country.trim() || undefined, notes: notes.trim() || undefined })
+      const img = imageUrl.trim()
+      await onSave({
+        name: name.trim(),
+        country: country.trim() || undefined,
+        notes: notes.trim() || undefined,
+        imageUrl: img || undefined,
+        // Se o usuário mexeu na foto, ela passa a ser dele; se apagou, o app volta a buscar no Discogs.
+        imageSource: img ? (img === initial?.imageUrl ? initial?.imageSource : 'manual') : undefined,
+      })
     } finally {
       setSaving(false)
     }
@@ -33,6 +42,10 @@ export function ArtistForm({ initial, onSave, onCancel }: Props) {
       <div className="field">
         <label htmlFor="artist-country">País</label>
         <input id="artist-country" value={country} onChange={(e) => setCountry(e.target.value)} placeholder="ex.: Reino Unido" />
+      </div>
+      <div className="field">
+        <label htmlFor="artist-image">Foto (URL)</label>
+        <input id="artist-image" value={imageUrl} onChange={(e) => setImageUrl(e.target.value)} placeholder="Deixe vazio para o app buscar no Discogs" />
       </div>
       <div className="field">
         <label htmlFor="artist-notes">Notas</label>

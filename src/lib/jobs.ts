@@ -7,7 +7,7 @@
 import { useSyncExternalStore } from 'react'
 import { db } from '../db/db'
 import { importDiscography, loadAlbumTracks, needsDiscography, needsTracks, type DiscographyResult } from './importArtist'
-import { needsPricing, updateAlbumPricing } from './pricing'
+import { needsArtistImage, needsPricing, updateAlbumPricing, updateArtistImage } from './pricing'
 
 export type JobKind = 'import' | 'tracks' | 'prices'
 export type JobStatus = 'queued' | 'running' | 'done' | 'error' | 'cancelled'
@@ -144,6 +144,13 @@ async function runTracks(job: Job) {
 
 async function runPrices(job: Job) {
   const artist = await db.artists.get(job.artistId)
+  if (artist && needsArtistImage(artist)) {
+    try {
+      await updateArtistImage(artist, 'low')
+    } catch {
+      /* sem foto não é grave; tenta de novo em outra ocasião */
+    }
+  }
   const pendingAlbums = (await db.albums.where('artistId').equals(job.artistId).toArray()).filter(needsPricing)
   patch(job.id, { total: pendingAlbums.length })
   let done = 0
@@ -210,6 +217,6 @@ export async function resumePendingJobs() {
     // Importado antes do filtro de vinil existir: revisa uma vez, em segundo plano.
     else if (!artist.discographyReviewedAt) enqueueImport(artist.id!, artist.name, true)
     else if (pendingTracks.has(artist.id!)) enqueueTracks(artist.id!, artist.name)
-    else if (pendingPrices.has(artist.id!)) enqueuePrices(artist.id!, artist.name)
+    else if (pendingPrices.has(artist.id!) || needsArtistImage(artist)) enqueuePrices(artist.id!, artist.name)
   }
 }

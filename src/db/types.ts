@@ -31,6 +31,10 @@ export interface Artist {
   discogsId?: number
   /** Quando a discografia foi conferida com o filtro "só edições em vinil". */
   discographyReviewedAt?: number
+  /** Foto do artista (Discogs) ou URL informada pelo usuário. */
+  imageUrl?: string
+  imageSource?: 'manual' | 'discogs'
+  imageCheckedAt?: number
   createdAt: number
   updatedAt: number
 }
@@ -64,7 +68,13 @@ export interface Album {
   discogsReleaseId?: number
   discogsInCollection?: number
   discogsForSale?: number
+  /** A edição de referência está bloqueada para venda no Discogs. */
+  discogsBlocked?: boolean
+  /** Miniatura da capa no Discogs (150 px), usada como reserva. */
+  discogsThumb?: string
   discogsCheckedAt?: number
+  /** Versão da regra usada na última consulta (ver PRICING_ALGO). */
+  discogsAlgo?: number
   createdAt: number
   updatedAt: number
 }

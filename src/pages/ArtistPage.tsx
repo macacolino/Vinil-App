@@ -2,6 +2,7 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import { useMemo, useState } from 'react'
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { AlbumCard } from '../components/AlbumCard'
+import { Cover } from '../components/Cover'
 import { AlbumForm, type AlbumFormData } from '../components/AlbumForm'
 import { ArtistForm } from '../components/ArtistForm'
 import { SortFilter, sortAlbums, type SortKey } from '../components/SortFilter'
@@ -66,8 +67,8 @@ export function ArtistPage() {
   const pendingTracks = albums.filter(needsTracks).length
   const pendingPrices = albums.filter(needsPricing).length
 
-  async function saveArtist(data: { name: string; country?: string; notes?: string }) {
-    await db.artists.update(artistId, { ...data, updatedAt: Date.now() })
+  async function saveArtist(data: { name: string; country?: string; notes?: string; imageUrl?: string; imageSource?: 'manual' | 'discogs' }) {
+    await db.artists.update(artistId, { ...data, imageCheckedAt: data.imageUrl ? artist!.imageCheckedAt : undefined, updatedAt: Date.now() })
     setMode('view')
   }
 
@@ -137,7 +138,10 @@ export function ArtistPage() {
           </button>
         </div>
       ) : (
-        <div className="page-title">
+        <div className="page-title artist-header">
+          <div className="artist-photo">
+            <Cover src={artist.imageUrl} alt={artist.name} />
+          </div>
           <div>
             <h1>{artist.name}</h1>
             <p className="subtitle">

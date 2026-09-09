@@ -85,7 +85,7 @@ export function ArtistSearch({ onClose }: Props) {
     }
   }
 
-  async function addManual(data: { name: string; country?: string; notes?: string }) {
+  async function addManual(data: { name: string; country?: string; notes?: string; imageUrl?: string; imageSource?: 'manual' | 'discogs' }) {
     const now = Date.now()
     const id = await db.artists.add({ ...data, uid: await uniqueUid('artists', artistUid(data)), createdAt: now, updatedAt: now })
     navigate(`/artistas/${id}`)
