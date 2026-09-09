@@ -70,8 +70,11 @@ export interface Album {
   discogsForSale?: number
   /** A edição de referência está bloqueada para venda no Discogs. */
   discogsBlocked?: boolean
-  /** Miniatura da capa no Discogs (150 px), usada como reserva. */
+  /** Miniatura da capa no Discogs (150 px), usada como última reserva. */
   discogsThumb?: string
+  /** Capa grande no Discogs (até 600 px), reserva de boa qualidade. */
+  discogsCoverUrl?: string
+  discogsCoverCheckedAt?: number
   discogsCheckedAt?: number
   /** Versão da regra usada na última consulta (ver PRICING_ALGO). */
   discogsAlgo?: number

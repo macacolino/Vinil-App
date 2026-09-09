@@ -1,10 +1,9 @@
 import { useEffect, useState } from 'react'
 
 interface Props {
-  src?: string
-  /** Imagem de reserva (ex.: miniatura do Discogs) se a principal falhar. */
+  /** Fontes em ordem de preferência; as vazias são ignoradas. */
+  sources: (string | undefined)[]
   alt?: string
-  fallbackSrc?: string
   size?: 'small' | 'normal' | 'large'
 }
 
@@ -20,17 +19,16 @@ function corsMode(url: string): 'anonymous' | undefined {
 }
 
 /**
- * Capa do álbum (ou foto). Ordem de tentativas: principal → reserva →
- * principal de novo após 2 s (falhas passageiras do servidor) → ícone.
+ * Capa do álbum (ou foto). Tenta as fontes em ordem; se todas falharem,
+ * repete a primeira após 2 s (falhas passageiras do servidor); depois, ícone.
  */
-export function Cover({ src, alt = '', fallbackSrc, size = 'normal' }: Props) {
+export function Cover({ sources, alt = '', size = 'normal' }: Props) {
+  const chain = sources.filter((u, i, arr): u is string => !!u && arr.indexOf(u) === i)
+  if (chain.length) chain.push(chain[0]) // segunda tentativa da primeira
+  const key = chain.join('|')
   const [attempt, setAttempt] = useState(0)
-  useEffect(() => setAttempt(0), [src, fallbackSrc])
+  useEffect(() => setAttempt(0), [key])
 
-  const chain: string[] = []
-  if (src) chain.push(src)
-  if (fallbackSrc && fallbackSrc !== src) chain.push(fallbackSrc)
-  if (src) chain.push(src) // segunda tentativa da principal
   const current = chain[attempt]
   const cls = `cover${size === 'small' ? ' small' : size === 'large' ? ' large' : ''}`
 
@@ -43,13 +41,13 @@ export function Cover({ src, alt = '', fallbackSrc, size = 'normal' }: Props) {
   }
 
   function onError() {
-    if (attempt + 1 >= chain.length) {
+    const next = attempt + 1
+    if (next >= chain.length) {
       setAttempt(chain.length) // esgotou
       return
     }
-    // Antes de repetir a principal, espera um pouco.
-    const delay = chain[attempt + 1] === src && attempt > 0 ? 2000 : 0
-    setTimeout(() => setAttempt((a) => a + 1), delay)
+    const isRetry = next === chain.length - 1
+    setTimeout(() => setAttempt(next), isRetry ? 2000 : 0)
   }
 
   return (
@@ -59,7 +57,29 @@ export function Cover({ src, alt = '', fallbackSrc, size = 'normal' }: Props) {
   )
 }
 
-/** Versão menor da capa do Cover Art Archive para listas e cards. */
+/** Versão pequena da capa do Cover Art Archive, para listas (miniaturas de ~56 px). */
 export function smallCover(url?: string): string | undefined {
-  return url?.replace(/\/front-500$/, '/front-250')
+  return url?.replace(/\/front-(500|1200)$/, '/front-250')
+}
+
+/** Versão grande (1200 px) para a página do álbum, nítida em telas de alta densidade. */
+export function largeCover(url?: string): string | undefined {
+  return url?.replace(/\/front-(250|500)$/, '/front-1200')
+}
+
+type CoverAlbum = { coverUrl?: string; discogsCoverUrl?: string; discogsThumb?: string }
+
+/** Fontes para um card (≈170 px): capa em 500 px, depois a grande do Discogs, depois a miniatura. */
+export function cardSources(album: CoverAlbum): (string | undefined)[] {
+  return [album.coverUrl, album.discogsCoverUrl, album.discogsThumb]
+}
+
+/** Fontes para miniatura de lista (56 px). */
+export function listSources(album: CoverAlbum): (string | undefined)[] {
+  return [smallCover(album.coverUrl), album.discogsCoverUrl, album.discogsThumb]
+}
+
+/** Fontes para a página do álbum: 1200 px se existir, senão 500, senão Discogs. */
+export function pageSources(album: CoverAlbum): (string | undefined)[] {
+  return [largeCover(album.coverUrl), album.coverUrl, album.discogsCoverUrl, album.discogsThumb]
 }

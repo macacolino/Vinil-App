@@ -28,6 +28,10 @@ let draining = false
 const pending: Pending[] = []
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
 
+const dbg = (...a: unknown[]) => {
+  if (import.meta.env.VITE_TEST_HOOKS === '1') console.debug('[discogs]', ...a)
+}
+
 async function drain() {
   if (draining) return
   draining = true
@@ -36,18 +40,23 @@ async function drain() {
       const idx = pending.findIndex((p) => p.priority === 'high')
       const next = pending.splice(idx >= 0 ? idx : 0, 1)[0]
       const wait = lastRequestAt + MIN_INTERVAL_MS - Date.now()
+      dbg('drain: próximo', next.priority, 'espera', wait, 'restam', pending.length)
       if (wait > 0) await sleep(wait)
+      dbg('drain: acordou', next.priority)
       lastRequestAt = Date.now()
       await next.run()
+      dbg('drain: concluído', next.priority)
     }
   } finally {
     draining = false
+    dbg('drain: fim')
   }
 }
 
 function scheduled<T>(priority: Priority, fn: () => Promise<T>): Promise<T> {
   return new Promise<T>((resolve, reject) => {
     pending.push({ priority, run: () => fn().then(resolve, reject) })
+    dbg('scheduled', priority, 'pendentes', pending.length, 'draining', draining)
     void drain()
   })
 }
@@ -184,6 +193,14 @@ export async function fetchArtistImage(discogsArtistId: number, priority: Priori
   const images = data.images ?? []
   const primary = images.find((i) => i.type === 'primary') ?? images[0]
   return primary?.uri ?? primary?.uri150 ?? null
+}
+
+/** Capa principal de uma edição no Discogs (até 600 px), ou null. */
+export async function fetchReleaseImage(releaseId: number, priority: Priority = 'high'): Promise<string | null> {
+  const data = await dgGet<{ images?: { type?: string; uri?: string; width?: number }[] }>(`releases/${releaseId}`, {}, priority)
+  const images = data.images ?? []
+  const primary = images.find((i) => i.type === 'primary') ?? images[0]
+  return primary?.uri ?? null
 }
 
 export function masterUrl(masterId: number): string {

@@ -12,7 +12,7 @@
  */
 import { db } from '../db/db'
 import type { Album, Artist } from '../db/types'
-import { DiscogsError, fetchArtistImage, fetchStats, fetchVinylVersions, searchArtist, searchMasters, type MasterCandidate } from './discogs'
+import { DiscogsError, fetchArtistImage, fetchReleaseImage, fetchStats, fetchVinylVersions, searchArtist, searchMasters, type MasterCandidate } from './discogs'
 import { fetchArtistDiscogsId, fetchDiscogsMasterId, type Priority } from './musicbrainz'
 
 /** Reconsulta o Discogs depois deste tempo. */
@@ -24,6 +24,31 @@ export function needsPricing(album: Album): boolean {
   if (!album.mbid && !album.discogsMasterId) return false
   if (!album.discogsCheckedAt || album.discogsAlgo !== PRICING_ALGO) return true
   return Date.now() - album.discogsCheckedAt > PRICING_TTL_MS
+}
+
+/** Já tem edição de referência no Discogs, mas ainda não buscou a capa grande dela. */
+export function needsCover(album: Album): boolean {
+  return !!album.discogsReleaseId && !album.discogsCoverUrl && !album.discogsCoverCheckedAt
+}
+
+/** Busca a capa grande (600 px) da edição de referência e grava. */
+export async function updateAlbumCover(album: Album, priority: Priority = 'high'): Promise<string | null> {
+  if (!album.id || !album.discogsReleaseId) return null
+  if (import.meta.env.VITE_TEST_HOOKS === '1') console.debug('[pricing] updateAlbumCover', album.title, album.discogsReleaseId, priority)
+  let url: string | null = null
+  try {
+    url = await fetchReleaseImage(album.discogsReleaseId, priority)
+  } catch (err) {
+    if (!(err instanceof DiscogsError && err.kind === 'notfound')) throw err
+  }
+  const patch: Partial<Album> = { discogsCoverCheckedAt: Date.now() }
+  if (url) {
+    patch.discogsCoverUrl = url
+    // Sem capa nenhuma (ou só a miniatura): a do Discogs vira a principal.
+    if (!album.coverUrl || album.coverUrl === album.discogsThumb) patch.coverUrl = url
+  }
+  await db.albums.update(album.id, patch)
+  return url
 }
 
 export function needsArtistImage(artist: Artist): boolean {
@@ -60,14 +85,23 @@ const norm = (t: string) =>
     .replace(/\(.*?\)|\[.*?\]/g, '')
     .replace(/[^a-z0-9]/g, '')
 
-/** Escolhe, entre os candidatos da busca, o master mais colecionado cujo título bate. */
+/**
+ * Escolhe, entre os candidatos da busca, o master oficial mais colecionado
+ * cujo título bate com "Artista - Título". Sem título igual, devolve null:
+ * é melhor não ter preço do que pegar o disco errado (a busca por
+ * "The Soundhouse Tapes" devolve também Killers e outros).
+ */
 export function pickMaster(candidates: MasterCandidate[], artistName: string, title: string): MasterCandidate | null {
   const wanted = norm(`${artistName}${title}`)
-  const official = candidates.filter((c) => !c.unofficial)
-  const matching = official.filter((c) => norm(c.title) === wanted)
-  const pool = matching.length ? matching : official
-  if (!pool.length) return null
-  return [...pool].sort((a, b) => b.have - a.have)[0]
+  const wantedTitle = norm(title)
+  const matching = candidates.filter((c) => {
+    if (c.unofficial) return false
+    const full = norm(c.title)
+    const afterDash = c.title.includes(' - ') ? norm(c.title.slice(c.title.indexOf(' - ') + 3)) : full
+    return full === wanted || afterDash === wantedTitle
+  })
+  if (!matching.length) return null
+  return [...matching].sort((a, b) => b.have - a.have)[0]
 }
 
 export interface PricingResult {
@@ -150,6 +184,11 @@ async function doUpdateAlbumPricing(album: Album, artistName: string, priority: 
   if (album.raritySource !== 'manual') {
     patch.rarity = rarity
     patch.raritySource = 'discogs'
+  }
+  // Edição de referência mudou: a capa grande precisa ser buscada de novo.
+  if (album.discogsReleaseId !== ref.id) {
+    patch.discogsCoverUrl = undefined
+    patch.discogsCoverCheckedAt = undefined
   }
   if (!album.coverUrl && ref.thumb) patch.coverUrl = ref.thumb
   await db.albums.update(album.id, patch)

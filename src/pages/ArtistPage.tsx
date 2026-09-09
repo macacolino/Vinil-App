@@ -140,7 +140,7 @@ export function ArtistPage() {
       ) : (
         <div className="page-title artist-header">
           <div className="artist-photo">
-            <Cover src={artist.imageUrl} alt={artist.name} />
+            <Cover sources={[artist.imageUrl]} alt={artist.name} />
           </div>
           <div>
             <h1>{artist.name}</h1>

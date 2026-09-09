@@ -1,7 +1,7 @@
 import { useLiveQuery } from 'dexie-react-hooks'
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Cover, smallCover } from '../components/Cover'
+import { Cover, listSources } from '../components/Cover'
 import { Rarity } from '../components/Rarity'
 import { SortFilter, sortAlbums, type SortKey } from '../components/SortFilter'
 import { db } from '../db/db'
@@ -137,7 +137,7 @@ export function LibraryPage() {
             <div className="list">
               {items.map(({ album, copy }) => (
                 <Link key={album.id} to={`/albuns/${album.id}`} className="list-item">
-                  <Cover src={smallCover(album.coverUrl)} fallbackSrc={album.discogsThumb} alt={album.title} size="small" />
+                  <Cover sources={listSources(album)} alt={album.title} size="small" />
                   <div className="grow">
                     <div className="name">
                       <span>{album.title}</span>

@@ -102,9 +102,15 @@ forma simples quando fizer sentido.
   `PRICING_ALGO` força reconsulta quando a regra muda. Foto do artista:
   `artists/{id}` do Discogs (id via MusicBrainz url-rels ou busca), guardada em
   `Artist.imageUrl`; o usuário pode pôr uma URL própria (`imageSource` manual).
-  Miniatura do Discogs (`discogsThumb`) serve de reserva para a capa; cards
-  usam `front-250` do Cover Art Archive. `i.discogs.com` NÃO envia CORS: o
-  componente `Cover` só usa `crossOrigin` nos hosts que respondem CORS.
+  Capas: `Cover` recebe uma lista de fontes em ordem (`cardSources`,
+  `listSources`, `pageSources` em `components/Cover.tsx`): Cover Art Archive
+  em 500 px nos cards, 250 px nas listas, 1200 px na página do álbum (nem
+  todo lançamento tem 1200; a cadeia cai para 500), depois a capa grande do
+  Discogs (`discogsCoverUrl`, 600 px, via `releases/{id}`, buscada na tarefa
+  de preços) e por fim a miniatura (`discogsThumb`, 150 px). O archive.org
+  oscila (500/reset), por isso a reserva e a segunda tentativa após 2 s.
+  `i.discogs.com` NÃO envia CORS: `Cover` só usa `crossOrigin` nos hosts que
+  respondem CORS.
   Valores editados à mão (`priceSource`/`raritySource` = manual) não são
   sobrescritos. Reconsulta a cada 30 dias. Limite do Discogs: 25/min, fila em
   `lib/discogs.ts`. Tarefa `prices` em `jobs.ts`, encadeada após as faixas.

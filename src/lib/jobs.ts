@@ -7,7 +7,7 @@
 import { useSyncExternalStore } from 'react'
 import { db } from '../db/db'
 import { importDiscography, loadAlbumTracks, needsDiscography, needsTracks, type DiscographyResult } from './importArtist'
-import { needsArtistImage, needsPricing, updateAlbumPricing, updateArtistImage } from './pricing'
+import { needsArtistImage, needsCover, needsPricing, updateAlbumCover, updateAlbumPricing, updateArtistImage } from './pricing'
 
 export type JobKind = 'import' | 'tracks' | 'prices'
 export type JobStatus = 'queued' | 'running' | 'done' | 'error' | 'cancelled'
@@ -142,7 +142,12 @@ async function runTracks(job: Job) {
   enqueuePrices(job.artistId, job.label)
 }
 
+const dbg = (...a: unknown[]) => {
+  if (import.meta.env.VITE_TEST_HOOKS === '1') console.debug('[jobs]', ...a)
+}
+
 async function runPrices(job: Job) {
+  dbg('runPrices início', job.id)
   const artist = await db.artists.get(job.artistId)
   if (artist && needsArtistImage(artist)) {
     try {
@@ -151,7 +156,8 @@ async function runPrices(job: Job) {
       /* sem foto não é grave; tenta de novo em outra ocasião */
     }
   }
-  const pendingAlbums = (await db.albums.where('artistId').equals(job.artistId).toArray()).filter(needsPricing)
+  const all = await db.albums.where('artistId').equals(job.artistId).toArray()
+  const pendingAlbums = all.filter((a) => needsPricing(a) || needsCover(a))
   patch(job.id, { total: pendingAlbums.length })
   let done = 0
   let failures = 0
@@ -161,17 +167,25 @@ async function runPrices(job: Job) {
       patch(job.id, { status: 'queued', done: 0, total: 0 })
       return
     }
-    const fresh = await db.albums.get(album.id!)
-    if (fresh && needsPricing(fresh)) {
-      try {
+    try {
+      let fresh = await db.albums.get(album.id!)
+      dbg('álbum', album.title, 'needsPricing', fresh && needsPricing(fresh))
+      if (fresh && needsPricing(fresh)) {
         await updateAlbumPricing(fresh, artist?.name ?? '', 'low')
-      } catch (err) {
-        failures += 1
-        if (failures >= 3) throw err // problema geral (sem internet, limite): para e mostra
+        dbg('preço ok', album.title)
+        fresh = await db.albums.get(album.id!)
       }
+      dbg('needsCover', album.title, fresh && needsCover(fresh))
+      if (fresh && needsCover(fresh)) await updateAlbumCover(fresh, 'low')
+      dbg('capa ok', album.title)
+    } catch (err) {
+      dbg('falha', album.title, err)
+      failures += 1
+      if (failures >= 3) throw err // problema geral (sem internet, limite): para e mostra
     }
     done += 1
     patch(job.id, { done })
+    dbg('done', done)
   }
   if (isCancelled(job.id)) return
   patch(job.id, { status: 'done' })
@@ -209,7 +223,7 @@ export async function resumePendingJobs() {
   const artists = await db.artists.toArray()
   const allAlbums = await db.albums.toArray()
   const pendingTracks = new Set(allAlbums.filter(needsTracks).map((a) => a.artistId))
-  const pendingPrices = new Set(allAlbums.filter(needsPricing).map((a) => a.artistId))
+  const pendingPrices = new Set(allAlbums.filter((a) => needsPricing(a) || needsCover(a)).map((a) => a.artistId))
   for (const artist of artists) {
     if (!artist.mbid) continue
     const count = allAlbums.filter((a) => a.artistId === artist.id).length

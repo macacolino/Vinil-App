@@ -63,7 +63,7 @@ export function ArtistsPage() {
         <div className="list">
           {rows.map(({ artist, total, have, want }) => (
             <Link key={artist.id} to={`/artistas/${artist.id}`} className="list-item">
-              <Cover src={artist.imageUrl} alt={artist.name} size="small" />
+              <Cover sources={[artist.imageUrl]} alt={artist.name} size="small" />
               <div className="grow">
                 <div className="name">{artist.name}</div>
                 <div className="meta">
