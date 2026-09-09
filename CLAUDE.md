@@ -23,9 +23,11 @@ forma simples quando fizer sentido.
   aceita chamadas do navegador (CORS) e já classifica estúdio / ao vivo /
   coletânea / EP. O Discogs fica para a fase 3 como fonte de preço estimado
   e raridade (estatísticas de mercado), não de discografia.
-- **Hospedagem (fase 4)**: GitHub Pages, em
-  https://macacolino.github.io/<nome-do-repositório>/ (o repositório se
-  chamava `main`; o usuário pediu para renomear para `vinil-app`). Workflow
+- **Hospedagem (fase 4)**: GitHub Pages, em https://macacolino.github.io/Vinil-App/
+  (repositório `macacolino/Vinil-App`, antes chamado `main`). Atenção: o
+  Pages diferencia maiúsculas no nome do repositório, então a URL precisa
+  ser escrita exatamente assim; se o repositório for renomeado para
+  minúsculas, a URL muda junto e basta rodar o workflow de novo. Workflow
   `.github/workflows/deploy-pages.yml`: publica a cada push na `main` e,
   enquanto durar o desenvolvimento, também na branch de trabalho. O
   repositório é público (exigência do Pages gratuito). O build usa
@@ -65,12 +67,13 @@ forma simples quando fizer sentido.
 - **Fase 2**: login e sincronização com Supabase.
 - **Fase 3**: preço estimado e raridade automáticos (Discogs marketplace
   stats), refinamentos da importação (filtrar só edições em vinil).
-- **Fase 4 (em andamento)**: deploy automático no GitHub Pages e instalação
-  no celular (PWA).
+- **Fase 4 (concluída)**: deploy automático no GitHub Pages; instalar no
+  celular = abrir a URL no Chrome/Safari e "Adicionar à tela de início".
 
 ## Estado atual
 
-- Branch de trabalho: `claude/sleepy-albattani-3pi081`.
+- Branch de trabalho: `claude/sleepy-albattani-3pi081`. Cada push nela
+  publica o app automaticamente no GitHub Pages (1 a 2 minutos).
 - Fase 1 pronta e testada no navegador (Playwright): seed, marcar "tenho",
   formulário da cópia, biblioteca com totais, cotação, exportar/importar
   backup, artista e álbum manuais, recarga offline via service worker.
