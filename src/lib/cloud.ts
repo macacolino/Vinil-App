@@ -40,8 +40,28 @@ export interface CloudProvider {
   fetchTombstonesSince(sinceIso: string): Promise<CloudTombstone[]>
 }
 
-const url = import.meta.env.VITE_SUPABASE_URL as string | undefined
 const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined
+const url = resolveUrl(import.meta.env.VITE_SUPABASE_URL as string | undefined, anonKey)
+
+/**
+ * Endereço do projeto. Se a variável estiver vazia ou errada (por exemplo,
+ * com a URL do site), deduz a partir da chave anon: ela é um JWT cujo campo
+ * "ref" é o identificador do projeto, e o endereço é sempre
+ * https://<ref>.supabase.co.
+ */
+export function resolveUrl(configured: string | undefined, key: string | undefined): string | undefined {
+  const c = configured?.trim().replace(/\/(rest\/v1)?\/?$/, '')
+  if (c && /^https:\/\/[a-z0-9-]+\.supabase\.co$/i.test(c)) return c
+  if (!key) return c || undefined
+  try {
+    const payload = key.split('.')[1]
+    const json = JSON.parse(atob(payload.replace(/-/g, '+').replace(/_/g, '/')))
+    if (typeof json.ref === 'string' && /^[a-z0-9]+$/.test(json.ref)) return `https://${json.ref}.supabase.co`
+  } catch {
+    /* chave em formato inesperado: fica com o que foi configurado */
+  }
+  return c || undefined
+}
 
 /** true quando o build recebeu as chaves do Supabase. */
 export const cloudConfigured = !!(url && anonKey)
