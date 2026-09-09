@@ -42,7 +42,7 @@ forma simples quando fizer sentido.
 
 ## Fases
 
-- **Fase 1 (em andamento)**: esqueleto Vite + React + TS, Dexie, PWA,
+- **Fase 1 (concluída)**: esqueleto Vite + React + TS, Dexie, PWA,
   páginas Artistas / Artista / Álbum / Biblioteca / Configurações, dados do
   Iron Maiden pré-carregados, tudo funcionando offline sem conta nenhuma.
 - **Fase 2**: login e sincronização com Supabase.
@@ -52,13 +52,33 @@ forma simples quando fizer sentido.
 ## Estado atual
 
 - Branch de trabalho: `claude/sleepy-albattani-3pi081`.
-- Já feito: `package.json` com dependências instaladas (react, react-dom,
-  react-router-dom, dexie, dexie-react-hooks; dev: vite, @vitejs/plugin-react,
-  typescript, vite-plugin-pwa, @types/react, @types/react-dom).
-- Ainda não existe código em `src/`. Próximo passo: escrever o app da fase 1.
-- A sessão anterior não tinha acesso de rede a MusicBrainz, Discogs e iTunes.
-  O ambiente foi alterado para acesso Full; confirmar com um `curl` antes de
-  depender dessas APIs.
+- Fase 1 pronta e testada no navegador (Playwright): seed, marcar "tenho",
+  formulário da cópia, biblioteca com totais, cotação, exportar/importar
+  backup, artista e álbum manuais, recarga offline via service worker.
+- Próximo passo: fase 2 (Supabase). Os campos `createdAt`/`updatedAt` já
+  existem em todas as tabelas para facilitar a sincronização.
+- Acesso de rede a MusicBrainz, Discogs e iTunes confirmado com `curl`
+  (HTTP 200). O Chromium do ambiente de testes NÃO tem saída para internet,
+  então capas externas não aparecem nos testes automatizados; as URLs foram
+  validadas com curl.
+
+## Estrutura do código
+
+- `src/db/types.ts` — tipos (Artist, Album, Copy, Setting) e rótulos em PT-BR.
+- `src/db/db.ts` — banco Dexie (`vinil`, versão 1) e chaves de settings.
+- `src/seed/ironMaiden.ts` — 36 LPs do Iron Maiden (gerado por script a
+  partir do iTunes Search + Cover Art Archive; raridade e preço são
+  estimativas iniciais). `src/seed/seed.ts` popula no primeiro uso e tem o
+  "Recolocar Iron Maiden" das Configurações.
+- `src/pages/` — uma página por rota: `/` Artistas, `/artistas/:id`,
+  `/albuns/:id`, `/biblioteca`, `/configuracoes`.
+- `src/components/` — Layout (cabeçalho + barra inferior), Cover, Rarity,
+  AlbumCard, formulários (ArtistForm, AlbumForm, CopyForm).
+- `src/lib/` — formatação de moeda/data, parser de faixas, backup JSON.
+- `vite.config.ts` — plugin PWA; capas externas ficam em cache
+  (CacheFirst) para funcionar offline.
+- Não há testes no repositório; validar com `npm run typecheck` e
+  `npm run build`, e testar o fluxo no navegador com `npm run dev`.
 
 ## Convenções
 
