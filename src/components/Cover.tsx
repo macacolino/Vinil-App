@@ -51,8 +51,9 @@ export function Cover({ sources, alt = '', size = 'normal' }: Props) {
   }
 
   return (
-    <div className={cls}>
-      <img key={`${attempt}-${current}`} src={current} alt={alt} loading="lazy" crossOrigin={corsMode(current)} onError={onError} />
+    <div className={cls} role="img" aria-label={alt}>
+      {/* alt vazio: enquanto uma fonte falha e a próxima carrega, não mostra ícone quebrado com texto */}
+      <img key={`${attempt}-${current}`} src={current} alt="" loading="lazy" crossOrigin={corsMode(current)} onError={onError} />
     </div>
   )
 }

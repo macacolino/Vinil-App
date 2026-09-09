@@ -10,11 +10,11 @@ import { formatBRL, formatUSD, useUsdToBrl } from '../lib/format'
 type LibrarySort = 'year' | 'rarity' | 'title' | 'paid' | 'estimated'
 
 const SORT_LABEL: Record<LibrarySort, string> = {
-  year: 'Ano',
-  rarity: 'Mais raros primeiro',
-  title: 'Título',
-  paid: 'Valor pago (maior primeiro)',
-  estimated: 'Valor estimado (maior primeiro)',
+  year: 'ano',
+  rarity: 'mais raros',
+  title: 'título',
+  paid: 'valor pago',
+  estimated: 'valor estimado',
 }
 
 interface Item {
@@ -114,7 +114,7 @@ export function LibraryPage() {
 
       <input className="search" placeholder="Buscar por título, banda, ano, gravadora…" value={search} onChange={(e) => setSearch(e.target.value)} />
 
-      <div className="toolbar">
+      <div className="toolbar toolbar-row">
         <select aria-label="Ordenar por" value={sort} onChange={(e) => setSort(e.target.value as LibrarySort)}>
           {(Object.keys(SORT_LABEL) as LibrarySort[]).map((k) => (
             <option key={k} value={k}>
