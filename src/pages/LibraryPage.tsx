@@ -208,15 +208,18 @@ export function LibraryPage() {
           return (
             <section key={artist.id} className="lib-group">
               <button className={`lib-group-head${open ? ' open' : ''}`} onClick={() => toggle(artist.id!)} aria-expanded={open}>
-                <Cover sources={[artist.imageUrl]} alt={artist.name} size="small" />
+                <span className="lib-artist-photo">
+                  <Cover sources={[artist.imageUrl]} alt={artist.name} size="small" />
+                </span>
                 <div className="grow">
+                  <div className="lib-artist-label">Artista</div>
                   <div className="name">{artist.name}</div>
-                  <div className="meta">
-                    {items.length} {items.length === 1 ? 'disco' : 'discos'}
-                  </div>
                 </div>
-                <span className="chevron lib-chevron" aria-hidden="true">
-                  ›
+                <span className="badge lib-count">
+                  {items.length} {items.length === 1 ? 'disco' : 'discos'}
+                </span>
+                <span className="lib-chevron" aria-hidden="true">
+                  {open ? '▾' : '▸'}
                 </span>
               </button>
               {open && (
