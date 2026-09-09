@@ -150,18 +150,36 @@ export async function fetchStats(releaseId: number, priority: Priority = 'high')
 
 export interface MasterCandidate {
   masterId: number
+  /** Título como o Discogs mostra: "Artista - Título". */
   title: string
   year?: number
   have: number
   want: number
   unofficial: boolean
+  /** Descrições de formato do resultado (ex.: "Album", "Live", "Compilation"). */
+  formats: string[]
+  thumb?: string
+  coverImage?: string
 }
 
-/** Candidatos a "master" de um álbum na busca do Discogs (só vinil), com quantas pessoas têm cada um. */
+/**
+ * Candidatos a "master" de um álbum na busca do Discogs, com quantas pessoas
+ * têm cada um. Sem filtro de formato de propósito: com format=Vinyl a busca
+ * deixava de fora o álbum de estúdio "Fear of the Dark" (que tem vinil); a
+ * checagem de vinil é feita depois, pelas edições do master.
+ */
 export async function searchMasters(artist: string, title: string, priority: Priority = 'high'): Promise<MasterCandidate[]> {
   const data = await dgGet<{
-    results?: { master_id?: number; title?: string; year?: string; format?: string[]; community?: { have?: number; want?: number } }[]
-  }>('database/search', { type: 'master', artist, release_title: title, format: 'Vinyl', per_page: '10' }, priority)
+    results?: {
+      master_id?: number
+      title?: string
+      year?: string
+      format?: string[]
+      community?: { have?: number; want?: number }
+      thumb?: string
+      cover_image?: string
+    }[]
+  }>('database/search', { type: 'master', artist, release_title: title, per_page: '15' }, priority)
   const seen = new Set<number>()
   const out: MasterCandidate[] = []
   for (const r of data.results ?? []) {
@@ -174,9 +192,42 @@ export async function searchMasters(artist: string, title: string, priority: Pri
       have: r.community?.have ?? 0,
       want: r.community?.want ?? 0,
       unofficial: (r.format ?? []).some((f) => /unofficial/i.test(f)),
+      formats: r.format ?? [],
+      thumb: r.thumb || undefined,
+      coverImage: r.cover_image || undefined,
     })
   }
   return out
+}
+
+export interface MasterDetails {
+  masterId: number
+  title: string
+  year?: number
+  coverUrl?: string
+  tracks: { position: string; title: string; durationMs?: number }[]
+}
+
+/** Detalhes de um master: título, ano, capa e faixas. */
+export async function fetchMasterDetails(masterId: number, priority: Priority = 'high'): Promise<MasterDetails> {
+  const d = await dgGet<{
+    title?: string
+    year?: number
+    images?: { type?: string; uri?: string }[]
+    tracklist?: { position?: string; type_?: string; title?: string; duration?: string }[]
+  }>(`masters/${masterId}`, {}, priority)
+  const primary = d.images?.find((i) => i.type === 'primary') ?? d.images?.[0]
+  const tracks = (d.tracklist ?? [])
+    .filter((t) => (t.type_ ?? 'track') === 'track' && t.title)
+    .map((t, i) => {
+      const m = t.duration?.match(/^(\d+):(\d{2})$/)
+      return {
+        position: t.position || String(i + 1),
+        title: t.title!,
+        durationMs: m ? (Number(m[1]) * 60 + Number(m[2])) * 1000 : undefined,
+      }
+    })
+  return { masterId, title: d.title ?? '', year: d.year || undefined, coverUrl: primary?.uri, tracks }
 }
 
 /** Id do artista no Discogs pela busca por nome. */

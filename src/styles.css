@@ -380,3 +380,5 @@ p { margin: 0; }
 .artist-photo { width: 84px; flex: none; }
 .artist-photo .cover { border-radius: 12px; font-size: 1.6rem; }
 .list-item .cover.small { border-radius: 8px; }
+.picker .list-item { padding: 8px 10px; }
+.picker .list-item .name { font-size: 0.92rem; }

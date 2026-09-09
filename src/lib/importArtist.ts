@@ -1,6 +1,8 @@
 import { db } from '../db/db'
 import type { Album, Artist } from '../db/types'
 import { albumUid, artistUid } from '../db/uid'
+import { fetchMasterDetails, type MasterCandidate } from './discogs'
+import { uniqueUid } from '../db/ops'
 import {
   coverArtUrl,
   countryName,
@@ -135,4 +137,45 @@ export function needsTracks(album: Album): boolean {
 /** Artista importado que ainda não tem nenhum álbum (importação interrompida). */
 export function needsDiscography(artist: Artist, albumCount: number): boolean {
   return !!artist.mbid && albumCount === 0
+}
+
+/** Tipo do álbum a partir das descrições de formato do Discogs. */
+export function albumTypeFromFormats(formats: string[]): Album['type'] {
+  const f = formats.map((x) => x.toLowerCase())
+  if (f.some((x) => x === 'live')) return 'live'
+  if (f.some((x) => x === 'compilation')) return 'compilation'
+  if (f.some((x) => x === 'ep' || x === 'single' || x === 'maxi-single' || x === 'mini-album')) return 'ep'
+  return 'studio'
+}
+
+/**
+ * Cria um álbum a partir de uma página ("master") escolhida no Discogs:
+ * título, ano, capa e faixas vêm de lá; preço e raridade vêm na sequência.
+ */
+export async function createAlbumFromMaster(artist: Artist, candidate: MasterCandidate): Promise<number> {
+  const existing = await db.albums.where('artistId').equals(artist.id!).filter((a) => a.discogsMasterId === candidate.masterId).first()
+  if (existing) return existing.id!
+  const details = await fetchMasterDetails(candidate.masterId, 'high')
+  const dash = candidate.title.indexOf(' - ')
+  const title = (details.title || (dash >= 0 ? candidate.title.slice(dash + 3) : candidate.title)).trim()
+  const year = details.year ?? candidate.year ?? 0
+  const now = Date.now()
+  const album: Album = {
+    uid: await uniqueUid('albums', `dg-${candidate.masterId}`),
+    artistId: artist.id!,
+    title,
+    year,
+    type: albumTypeFromFormats(candidate.formats),
+    coverUrl: details.coverUrl ?? candidate.coverImage ?? candidate.thumb,
+    discogsCoverUrl: details.coverUrl,
+    discogsThumb: candidate.thumb,
+    tracks: details.tracks,
+    rarity: DEFAULT_IMPORTED_RARITY,
+    status: 'none',
+    discogsMasterId: candidate.masterId,
+    discogsMasterSource: 'manual',
+    createdAt: now,
+    updatedAt: now,
+  }
+  return (await db.albums.add(album)) as number
 }

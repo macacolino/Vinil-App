@@ -3,6 +3,7 @@ import { NavLink, Outlet } from 'react-router-dom'
 import { useJobs } from '../lib/jobs'
 import { useSyncStatus } from '../lib/sync'
 import { JobsBar } from './JobsBar'
+import { ScrollManager } from './ScrollManager'
 
 function useOnline() {
   const [online, setOnline] = useState(navigator.onLine)
@@ -34,6 +35,7 @@ export function Layout() {
           : '☁ sincronizado'
   return (
     <>
+      <ScrollManager />
       <header className="app-header">
         <NavLink to="/" className="brand">
           <img src={`${import.meta.env.BASE_URL}favicon.svg`} alt="" />

@@ -95,9 +95,16 @@ forma simples quando fizer sentido.
   em vinil e a mais colecionada vira referência (pulando edições
   `blocked_from_sale`); `marketplace/stats/{release}?curr_abbr=USD` dá menor
   anúncio e quantidade à venda. O master vem primeiro da **busca do Discogs**
-  (`database/search` type=master, o candidato oficial mais colecionado cujo
-  título bate), porque o link do MusicBrainz pode apontar para uma página
-  secundária (Killers → master 14360, bloqueado, em vez de 4068163). Raridade
+  (`database/search` type=master, SEM `format=Vinyl`, porque com o filtro a
+  busca omitia o "Fear of the Dark" de estúdio; candidato oficial com título
+  exatamente igual, preferindo o ano do álbum ±1 e depois o mais colecionado;
+  parênteses contam: "(Live)" é outro disco), porque o link do MusicBrainz
+  pode apontar para uma página secundária (Killers → master 14360, bloqueado,
+  em vez de 4068163). O usuário pode escolher a página à mão ("Corrigir" na
+  página do álbum → `DiscogsMasterPicker`; `discogsMasterSource = manual`
+  trava a escolha) e adicionar álbuns direto do Discogs ("+ Álbum" →
+  busca por título → `createAlbumFromMaster`, com faixas e capa do master;
+  serve para discos fora do MusicBrainz, ex.: clássica). Raridade
   = heurística em `lib/pricing.ts` (coleções no Discogs, à venda, preço);
   `PRICING_ALGO` força reconsulta quando a regra muda. Foto do artista:
   `artists/{id}` do Discogs (id via MusicBrainz url-rels ou busca), guardada em
@@ -170,7 +177,10 @@ forma simples quando fizer sentido.
   (lista curada) é marcado como revisado na versão 3 do banco. `components/JobsBar.tsx` mostra o progresso
   acima do menu, em qualquer tela.
 - `src/components/ArtistSearch.tsx` — caixa "Novo artista" com busca e
-  importação; `SortFilter.tsx` — ordenação e filtro por raridade.
+  importação; `SortFilter.tsx` — ordenação e filtro por raridade;
+  `DiscogsMasterPicker.tsx` — busca de páginas do Discogs para corrigir ou
+  adicionar álbum; `ScrollManager.tsx` — tela nova abre no topo, "voltar"
+  restaura a rolagem (espera a lista carregar).
 - `src/lib/cloud.ts` — interface `CloudProvider` + implementação Supabase
   (e `setCloudProvider` para os testes). `src/lib/sync.ts` — motor de
   sincronização (push/pull, estado para a UI, `startSync`, `scheduleSync`).

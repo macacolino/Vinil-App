@@ -65,6 +65,8 @@ export interface Album {
   raritySource?: 'manual' | 'discogs'
   /** Dados do Discogs (fase 3). */
   discogsMasterId?: number
+  /** "manual" = o usuário escolheu a página do Discogs; a busca automática não troca mais. */
+  discogsMasterSource?: 'manual' | 'auto'
   discogsReleaseId?: number
   discogsInCollection?: number
   discogsForSale?: number

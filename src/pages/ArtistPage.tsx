@@ -4,13 +4,14 @@ import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { AlbumCard } from '../components/AlbumCard'
 import { Cover } from '../components/Cover'
 import { AlbumForm, type AlbumFormData } from '../components/AlbumForm'
+import { DiscogsMasterPicker } from '../components/DiscogsMasterPicker'
 import { ArtistForm } from '../components/ArtistForm'
 import { SortFilter, sortAlbums, type SortKey } from '../components/SortFilter'
 import { db } from '../db/db'
 import { deleteArtistWithAlbums, uniqueUid } from '../db/ops'
 import { albumUid } from '../db/uid'
 import { ALBUM_TYPES, ALBUM_TYPE_LABEL, type Album, type AlbumStatus } from '../db/types'
-import { needsTracks } from '../lib/importArtist'
+import { createAlbumFromMaster, needsTracks } from '../lib/importArtist'
 import { activeJobFor, cancelJob, enqueueImport, enqueuePrices, enqueueTracks, useJobs } from '../lib/jobs'
 import { needsPricing } from '../lib/pricing'
 
@@ -26,7 +27,7 @@ export function ArtistPage() {
   const navigate = useNavigate()
   const location = useLocation()
   const importState = (location.state as ImportState | null) ?? null
-  const [mode, setMode] = useState<'view' | 'edit' | 'add'>('view')
+  const [mode, setMode] = useState<'view' | 'edit' | 'add' | 'addManual'>('view')
   const [filter, setFilter] = useState<StatusFilter>('all')
   const [sort, setSort] = useState<SortKey>('year')
   const [minRarity, setMinRarity] = useState(0)
@@ -165,7 +166,28 @@ export function ArtistPage() {
 
       {mode === 'add' && (
         <div className="card">
-          <h2>Novo álbum</h2>
+          <div className="page-title" style={{ marginBottom: 8 }}>
+            <h2 style={{ marginBottom: 0 }}>Novo álbum</h2>
+            <span className="spacer" />
+            <button className="btn ghost small" onClick={() => setMode('addManual')}>
+              Cadastrar à mão
+            </button>
+          </div>
+          <DiscogsMasterPicker
+            artistName={artist.name}
+            actionLabel="Adicionar"
+            onCancel={() => setMode('view')}
+            onPick={async (c) => {
+              const id = await createAlbumFromMaster(artist, c)
+              setMode('view')
+              navigate(`/albuns/${id}`)
+            }}
+          />
+        </div>
+      )}
+      {mode === 'addManual' && (
+        <div className="card">
+          <h2>Novo álbum (à mão)</h2>
           <AlbumForm onSave={addAlbum} onCancel={() => setMode('view')} />
         </div>
       )}

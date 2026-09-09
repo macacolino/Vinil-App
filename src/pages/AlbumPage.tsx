@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { AlbumForm, type AlbumFormData } from '../components/AlbumForm'
 import { CopyForm, type CopyFormData } from '../components/CopyForm'
+import { DiscogsMasterPicker } from '../components/DiscogsMasterPicker'
 import { Cover, pageSources } from '../components/Cover'
 import { Rarity } from '../components/Rarity'
 import { db } from '../db/db'
@@ -25,6 +26,7 @@ export function AlbumPage() {
   const [tracksState, setTracksState] = useState<'idle' | 'loading' | 'error' | 'empty'>('idle')
   const [tracksError, setTracksError] = useState<string | null>(null)
   const [priceState, setPriceState] = useState<'idle' | 'loading' | 'error' | 'notfound'>('idle')
+  const [fixingDiscogs, setFixingDiscogs] = useState(false)
   const [priceError, setPriceError] = useState<string | null>(null)
   const autoPricedFor = useRef<number | null>(null)
 
@@ -215,9 +217,14 @@ export function AlbumPage() {
                   <span className="muted">—</span>
                 )}
                 {priceState !== 'loading' && (
-                  <button className="btn ghost small" style={{ marginLeft: 8 }} onClick={() => fetchPricingNow(true)}>
-                    Atualizar
-                  </button>
+                  <>
+                    <button className="btn ghost small" style={{ marginLeft: 8 }} onClick={() => fetchPricingNow(true)}>
+                      Atualizar
+                    </button>
+                    <button className="btn ghost small" onClick={() => setFixingDiscogs(true)}>
+                      Corrigir
+                    </button>
+                  </>
                 )}
               </dd>
               {album.notes && (
@@ -228,6 +235,44 @@ export function AlbumPage() {
               )}
             </dl>
           </div>
+
+          {fixingDiscogs && artist && (
+            <div className="card">
+              <h2>Qual é este disco no Discogs?</h2>
+              <p className="muted" style={{ marginBottom: 10 }}>
+                Escolha a página certa (a mais colecionada costuma ser a principal). Preço, raridade e capa de reserva
+                passam a vir dela.
+              </p>
+              <DiscogsMasterPicker
+                artistName={artist.name}
+                initialQuery={album.title}
+                onCancel={() => setFixingDiscogs(false)}
+                onPick={async (c) => {
+                  await db.albums.update(albumId, {
+                    discogsMasterId: c.masterId,
+                    discogsMasterSource: 'manual',
+                    discogsReleaseId: undefined,
+                    discogsCoverUrl: undefined,
+                    discogsCoverCheckedAt: undefined,
+                    discogsCheckedAt: undefined,
+                    updatedAt: Date.now(),
+                  })
+                  setFixingDiscogs(false)
+                  const fresh = await db.albums.get(albumId)
+                  if (fresh) {
+                    setPriceState('loading')
+                    try {
+                      const r = await updateAlbumPricing({ ...fresh, discogsCheckedAt: undefined }, artist.name, 'high')
+                      setPriceState(r.found ? 'idle' : 'notfound')
+                    } catch (err) {
+                      setPriceState('error')
+                      setPriceError(err instanceof Error ? err.message : String(err))
+                    }
+                  }
+                }}
+              />
+            </div>
+          )}
 
           {album.status === 'have' && (
             <div className="card">

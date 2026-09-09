@@ -18,7 +18,7 @@ import { fetchArtistDiscogsId, fetchDiscogsMasterId, type Priority } from './mus
 /** Reconsulta o Discogs depois deste tempo. */
 export const PRICING_TTL_MS = 30 * 24 * 60 * 60 * 1000
 /** Muda quando a regra de escolha/raridade muda, para reconsultar tudo uma vez. */
-export const PRICING_ALGO = 2
+export const PRICING_ALGO = 3
 
 export function needsPricing(album: Album): boolean {
   if (!album.mbid && !album.discogsMasterId) return false
@@ -77,21 +77,22 @@ export function rarityFromDiscogs(inCollection: number, forSale: number | null, 
   return rarity
 }
 
+/** Normaliza para comparar títulos. Mantém o que está entre parênteses: "(Live)" é outro disco. */
 const norm = (t: string) =>
   t
     .normalize('NFD')
     .replace(/[̀-ͯ]/g, '')
     .toLowerCase()
-    .replace(/\(.*?\)|\[.*?\]/g, '')
+    .replace(/&/g, 'and')
     .replace(/[^a-z0-9]/g, '')
 
 /**
- * Escolhe, entre os candidatos da busca, o master oficial mais colecionado
- * cujo título bate com "Artista - Título". Sem título igual, devolve null:
- * é melhor não ter preço do que pegar o disco errado (a busca por
- * "The Soundhouse Tapes" devolve também Killers e outros).
+ * Escolhe, entre os candidatos da busca, o master oficial cujo título bate com
+ * "Artista - Título": primeiro os do mesmo ano do álbum (±1), depois o mais
+ * colecionado. Sem título igual, devolve null: é melhor não ter preço do que
+ * pegar o disco errado.
  */
-export function pickMaster(candidates: MasterCandidate[], artistName: string, title: string): MasterCandidate | null {
+export function pickMaster(candidates: MasterCandidate[], artistName: string, title: string, year?: number): MasterCandidate | null {
   const wanted = norm(`${artistName}${title}`)
   const wantedTitle = norm(title)
   const matching = candidates.filter((c) => {
@@ -101,7 +102,9 @@ export function pickMaster(candidates: MasterCandidate[], artistName: string, ti
     return full === wanted || afterDash === wantedTitle
   })
   if (!matching.length) return null
-  return [...matching].sort((a, b) => b.have - a.have)[0]
+  const sameYear = year ? matching.filter((c) => c.year && Math.abs(c.year - year) <= 1) : []
+  const pool = sameYear.length ? sameYear : matching
+  return [...pool].sort((a, b) => b.have - a.have)[0]
 }
 
 export interface PricingResult {
@@ -127,12 +130,14 @@ export function updateAlbumPricing(album: Album, artistName: string, priority: P
 async function doUpdateAlbumPricing(album: Album, artistName: string, priority: Priority): Promise<PricingResult> {
   const now = Date.now()
 
-  // 1) master: busca do Discogs primeiro; link do MusicBrainz como reserva.
-  let masterId: number | null = null
-  try {
-    masterId = pickMaster(await searchMasters(artistName, album.title, priority), artistName, album.title)?.masterId ?? null
-  } catch (err) {
-    if (!(err instanceof DiscogsError && err.kind === 'notfound')) throw err
+  // 1) master: escolhido pelo usuário > busca do Discogs > link do MusicBrainz.
+  let masterId: number | null = album.discogsMasterSource === 'manual' ? (album.discogsMasterId ?? null) : null
+  if (!masterId) {
+    try {
+      masterId = pickMaster(await searchMasters(artistName, album.title, priority), artistName, album.title, album.year)?.masterId ?? null
+    } catch (err) {
+      if (!(err instanceof DiscogsError && err.kind === 'notfound')) throw err
+    }
   }
   if (!masterId && album.mbid) {
     try {
