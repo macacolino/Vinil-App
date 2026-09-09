@@ -27,7 +27,11 @@ export function Cover({ sources, alt = '', size = 'normal' }: Props) {
   if (chain.length) chain.push(chain[0]) // segunda tentativa da primeira
   const key = chain.join('|')
   const [attempt, setAttempt] = useState(0)
-  useEffect(() => setAttempt(0), [key])
+  const [loaded, setLoaded] = useState(false)
+  useEffect(() => {
+    setAttempt(0)
+    setLoaded(false)
+  }, [key])
 
   const current = chain[attempt]
   const cls = `cover${size === 'small' ? ' small' : size === 'large' ? ' large' : ''}`
@@ -53,7 +57,16 @@ export function Cover({ sources, alt = '', size = 'normal' }: Props) {
   return (
     <div className={cls} role="img" aria-label={alt}>
       {/* alt vazio: enquanto uma fonte falha e a próxima carrega, não mostra ícone quebrado com texto */}
-      <img key={`${attempt}-${current}`} src={current} alt="" loading="lazy" crossOrigin={corsMode(current)} onError={onError} />
+      <img
+        key={`${attempt}-${current}`}
+        src={current}
+        alt=""
+        loading="lazy"
+        crossOrigin={corsMode(current)}
+        style={loaded ? undefined : { visibility: 'hidden' }}
+        onLoad={() => setLoaded(true)}
+        onError={onError}
+      />
     </div>
   )
 }
