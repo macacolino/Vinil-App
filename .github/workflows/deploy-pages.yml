@@ -34,6 +34,10 @@ jobs:
       - run: npm run build
         env:
           VITE_BASE: /${{ github.event.repository.name }}/
+          # Chaves do Supabase (Settings > Secrets and variables > Actions). Sem elas o app
+          # funciona normalmente, só sem login e sincronização.
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
       # Pages devolve 404.html para caminhos desconhecidos; com uma cópia do
       # index.html, abrir /main/albuns/5 direto no navegador continua funcionando.
       - run: cp dist/index.html dist/404.html

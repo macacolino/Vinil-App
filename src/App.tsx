@@ -7,11 +7,13 @@ import { ArtistsPage } from './pages/ArtistsPage'
 import { LibraryPage } from './pages/LibraryPage'
 import { SettingsPage } from './pages/SettingsPage'
 import { resumePendingJobs } from './lib/jobs'
+import { startSync } from './lib/sync'
 
 export default function App() {
   // Retoma importações e buscas de faixas interrompidas (app fechado no meio).
   useEffect(() => {
     void resumePendingJobs()
+    void startSync()
   }, [])
   return (
     <Routes>

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { db } from '../db/db'
+import { artistUid } from '../db/uid'
 import { createArtistFromMusicBrainz } from '../lib/importArtist'
 import { enqueueImport } from '../lib/jobs'
 import { MusicBrainzError, countryName, searchArtists, type MBArtist } from '../lib/musicbrainz'
@@ -85,7 +86,7 @@ export function ArtistSearch({ onClose }: Props) {
 
   async function addManual(data: { name: string; country?: string; notes?: string }) {
     const now = Date.now()
-    const id = await db.artists.add({ ...data, createdAt: now, updatedAt: now })
+    const id = await db.artists.add({ ...data, uid: artistUid(data), createdAt: now, updatedAt: now })
     navigate(`/artistas/${id}`)
   }
 
@@ -93,7 +94,7 @@ export function ArtistSearch({ onClose }: Props) {
     return (
       <div className="card">
         <h2>Cadastrar artista à mão</h2>
-        <ArtistForm initial={query ? { name: query, createdAt: 0, updatedAt: 0 } : undefined} onSave={addManual} onCancel={() => setManual(false)} />
+        <ArtistForm initial={query ? { uid: '', name: query, createdAt: 0, updatedAt: 0 } : undefined} onSave={addManual} onCancel={() => setManual(false)} />
       </div>
     )
   }

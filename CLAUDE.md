@@ -15,7 +15,21 @@ forma simples quando fizer sentido.
   funciona sem internet e enfileira mudanças para sincronizar quando conectar.
 - **Backend (fase 2)**: Supabase (Postgres). Escolhido em vez de Firebase por
   ser SQL, mais fácil de entender e consultar; uso pessoal, conflitos de sync
-  são raros. As chaves ficam em `.env` e nunca vão para o GitHub.
+  são raros. As chaves ficam em `.env` localmente e em *secrets* do GitHub
+  Actions para o build do Pages (`VITE_SUPABASE_URL`,
+  `VITE_SUPABASE_ANON_KEY`); nunca em arquivo commitado. Login por e-mail e
+  senha (sem provedores sociais, para não exigir configuração extra).
+- **Sincronização**: "último a gravar ganha" por registro, comparando
+  `updatedAt` (relógio do aparelho). Cada registro tem um `uid` global e
+  determinístico (`db/uid.ts`: `mb-<mbid>` para o que vem do MusicBrainz,
+  slug de nome/título+ano para o manual), então o mesmo álbum em dois
+  aparelhos nunca duplica. Toda gravação local marca `dirty = 1` via
+  middleware do Dexie (`db.ts`); a sincronização grava com a transação
+  marcada `fromSync` para não sujar. Exclusões viram lápides (`tombstones`)
+  enviadas à nuvem. O "desde quando" do pull usa `synced_at` do servidor,
+  imune a relógio errado no celular. Os dados pré-carregados (Iron Maiden)
+  nascem com data fixa antiga (`SEED_TIMESTAMP`) e `dirty = 0`: só vão para a
+  nuvem depois de editados, e qualquer edição ganha deles.
 - **Catálogo**: discografias importadas do **MusicBrainz** (busca do artista
   + release groups oficiais **que tenham pelo menos uma edição em vinil**,
   cruzando `release-group` e `release?query=format:*vinyl*`; sem esse filtro
@@ -67,7 +81,9 @@ forma simples quando fizer sentido.
 - **Fase 1 (concluída)**: esqueleto Vite + React + TS, Dexie, PWA,
   páginas Artistas / Artista / Álbum / Biblioteca / Configurações, dados do
   Iron Maiden pré-carregados, tudo funcionando offline sem conta nenhuma.
-- **Fase 2**: login e sincronização com Supabase.
+- **Fase 2 (código pronto, falta o projeto no Supabase)**: login e
+  sincronização. Testada com dois "aparelhos" e uma nuvem falsa em memória
+  (Playwright), incluindo migração v3→v4, exclusões, conflito e sair/entrar.
 - **Fase 3**: preço estimado e raridade automáticos (Discogs marketplace
   stats), refinamentos da importação (filtrar só edições em vinil).
 - **Fase 4 (concluída)**: deploy automático no GitHub Pages; instalar no
@@ -83,14 +99,18 @@ forma simples quando fizer sentido.
 - Importação pelo MusicBrainz pronta (adiantada da fase 3) e testada com
   respostas reais da API gravadas em disco (o Chromium de teste não tem
   internet, então as chamadas são simuladas com `page.route`).
-- Banco Dexie na versão 3 (v2: índices `mbid` e `rarity`; v3: marca o Iron
-  Maiden como revisado). Nunca alterar uma versão já publicada: criar
-  `this.version(4)` etc.
+- Nunca alterar uma versão do Dexie já publicada: criar `this.version(5)` etc.
 - A prévia publicada como Artifact (build com `VITE_STATIC_DEMO=1`) não tem
   acesso à internet: a busca de artistas mostra um aviso nela. Só funciona
   no app publicado de verdade (fase 4).
-- Próximo passo: fase 2 (Supabase). Os campos `createdAt`/`updatedAt` já
-  existem em todas as tabelas para facilitar a sincronização.
+- Para ativar a nuvem (passos do usuário): criar projeto no Supabase; rodar
+  `supabase/schema.sql` no SQL Editor; em Authentication > Providers > Email
+  desligar "Confirm email" (opcional, simplifica); em Authentication > URL
+  Configuration pôr a URL do app como Site URL; copiar Project URL e anon key
+  (Settings > API) para os secrets do GitHub `VITE_SUPABASE_URL` e
+  `VITE_SUPABASE_ANON_KEY`; rodar o workflow de novo. Sem as chaves o app
+  funciona normalmente, só sem o card de login.
+- Banco Dexie na versão 4 (v4: `uid`, `dirty`, tabela `tombstones`).
 - Acesso de rede a MusicBrainz, Discogs e iTunes confirmado com `curl`
   (HTTP 200). O Chromium do ambiente de testes NÃO tem saída para internet,
   então capas externas não aparecem nos testes automatizados; as URLs foram
@@ -99,7 +119,9 @@ forma simples quando fizer sentido.
 ## Estrutura do código
 
 - `src/db/types.ts` — tipos (Artist, Album, Copy, Setting) e rótulos em PT-BR.
-- `src/db/db.ts` — banco Dexie (`vinil`, versão 3) e chaves de settings.
+- `src/db/db.ts` — banco Dexie (`vinil`, versão 4), middleware que marca
+  `dirty`, `syncTransaction`, `onLocalChange`. `db/ops.ts` — exclusões com
+  lápides (usar sempre em vez de `delete` direto). `db/uid.ts` — uids.
 - `src/seed/ironMaiden.ts` — 36 LPs do Iron Maiden (gerado por script a
   partir do iTunes Search + Cover Art Archive; raridade e preço são
   estimativas iniciais). `src/seed/seed.ts` popula no primeiro uso e tem o
@@ -122,6 +144,14 @@ forma simples quando fizer sentido.
   acima do menu, em qualquer tela.
 - `src/components/ArtistSearch.tsx` — caixa "Novo artista" com busca e
   importação; `SortFilter.tsx` — ordenação e filtro por raridade.
+- `src/lib/cloud.ts` — interface `CloudProvider` + implementação Supabase
+  (e `setCloudProvider` para os testes). `src/lib/sync.ts` — motor de
+  sincronização (push/pull, estado para a UI, `startSync`, `scheduleSync`).
+  `components/AccountCard.tsx` — login/cadastro/sair/sincronizar agora nas
+  Configurações. `supabase/schema.sql` — tabelas, trigger de `synced_at` e
+  RLS por usuário.
+- Build de teste com `VITE_TEST_HOOKS=1` expõe `window.__vinil`
+  (`setCloudProvider`, `syncNow`, `db`) para o Playwright.
 - `vite.config.ts` — plugin PWA; capas externas ficam em cache
   (CacheFirst) para funcionar offline.
 - Não há testes no repositório; validar com `npm run typecheck` e

@@ -6,6 +6,8 @@ import { CopyForm, type CopyFormData } from '../components/CopyForm'
 import { Cover } from '../components/Cover'
 import { Rarity } from '../components/Rarity'
 import { db } from '../db/db'
+import { deleteAlbums, deleteCopyForAlbum } from '../db/ops'
+import { copyUid } from '../db/uid'
 import { ALBUM_TYPE_LABEL, GRADE_LABEL, type AlbumStatus } from '../db/types'
 import { formatBRL, formatDate, formatDuration, formatUSD, useUsdToBrl } from '../lib/format'
 import { loadAlbumTracks, needsTracks } from '../lib/importArtist'
@@ -55,10 +57,8 @@ export function AlbumPage() {
     if (album!.status === 'have' && status !== 'have' && hasCopyData) {
       if (!window.confirm('Isso apaga os dados da sua cópia (prensagem, condição, valor pago…). Continuar?')) return
     }
-    await db.transaction('rw', db.albums, db.copies, async () => {
-      await db.albums.update(albumId, { status, updatedAt: Date.now() })
-      if (status !== 'have') await db.copies.where('albumId').equals(albumId).delete()
-    })
+    await db.albums.update(albumId, { status, updatedAt: Date.now() })
+    if (status !== 'have') await deleteCopyForAlbum(albumId)
     if (status === 'have' && !copy) setEditingCopy(true)
   }
 
@@ -72,17 +72,14 @@ export function AlbumPage() {
     if (copy?.id) {
       await db.copies.update(copy.id, { ...data, updatedAt: now })
     } else {
-      await db.copies.add({ ...data, albumId, createdAt: now, updatedAt: now })
+      await db.copies.add({ ...data, uid: copyUid(album!.uid), albumId, createdAt: now, updatedAt: now })
     }
     setEditingCopy(false)
   }
 
   async function removeAlbum() {
     if (!window.confirm(`Apagar "${album!.title}"? Isso não pode ser desfeito.`)) return
-    await db.transaction('rw', db.albums, db.copies, async () => {
-      await db.copies.where('albumId').equals(albumId).delete()
-      await db.albums.delete(albumId)
-    })
+    await deleteAlbums([albumId])
     navigate(`/artistas/${album!.artistId}`)
   }
 

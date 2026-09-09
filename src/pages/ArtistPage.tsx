@@ -6,6 +6,8 @@ import { AlbumForm, type AlbumFormData } from '../components/AlbumForm'
 import { ArtistForm } from '../components/ArtistForm'
 import { SortFilter, sortAlbums, type SortKey } from '../components/SortFilter'
 import { db } from '../db/db'
+import { deleteArtistWithAlbums } from '../db/ops'
+import { albumUid } from '../db/uid'
 import { ALBUM_TYPES, ALBUM_TYPE_LABEL, type Album, type AlbumStatus } from '../db/types'
 import { needsTracks } from '../lib/importArtist'
 import { activeJobFor, cancelJob, enqueueImport, enqueueTracks, useJobs } from '../lib/jobs'
@@ -68,7 +70,7 @@ export function ArtistPage() {
 
   async function addAlbum(data: AlbumFormData) {
     const now = Date.now()
-    const album: Album = { ...data, artistId, status: 'none', createdAt: now, updatedAt: now }
+    const album: Album = { ...data, uid: albumUid(data, artist!.uid), artistId, status: 'none', createdAt: now, updatedAt: now }
     const newId = await db.albums.add(album)
     setMode('view')
     navigate(`/albuns/${newId}`)
@@ -77,12 +79,7 @@ export function ArtistPage() {
   async function removeArtist() {
     const msg = `Apagar "${artist!.name}" e todos os seus ${albums!.length} álbuns (incluindo os dados das suas cópias)? Isso não pode ser desfeito.`
     if (!window.confirm(msg)) return
-    await db.transaction('rw', db.artists, db.albums, db.copies, async () => {
-      const ids = albums!.map((a) => a.id!)
-      await db.copies.where('albumId').anyOf(ids).delete()
-      await db.albums.bulkDelete(ids)
-      await db.artists.delete(artistId)
-    })
+    await deleteArtistWithAlbums(artistId)
     navigate('/')
   }
 

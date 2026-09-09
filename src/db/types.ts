@@ -17,6 +17,10 @@ export interface Track {
 
 export interface Artist {
   id?: number
+  /** Identificador global para sincronização (ver db/uid.ts). */
+  uid: string
+  /** 1 = alterado neste aparelho e ainda não enviado à nuvem. */
+  dirty?: number
   name: string
   country?: string
   /** Código ISO do país (ex.: GB), usado para escolher a edição de referência. */
@@ -33,6 +37,8 @@ export interface Artist {
 
 export interface Album {
   id?: number
+  uid: string
+  dirty?: number
   artistId: number
   title: string
   year: number
@@ -57,6 +63,8 @@ export interface Album {
 /** A cópia física que o usuário tem de um álbum (uma por álbum). */
 export interface Copy {
   id?: number
+  uid: string
+  dirty?: number
   albumId: number
   pressingYear?: number
   pressingCountry?: string
@@ -76,7 +84,18 @@ export interface Copy {
 export interface Setting {
   key: string
   value: unknown
+  updatedAt?: number
+  dirty?: number
 }
+
+/** Registro de exclusão, para avisar a nuvem e os outros aparelhos. */
+export interface Tombstone {
+  uid: string
+  table: 'artists' | 'albums' | 'copies' | 'settings'
+  deletedAt: number
+}
+
+export type SyncTable = Tombstone['table']
 
 export const ALBUM_TYPE_LABEL: Record<AlbumType, string> = {
   studio: 'Estúdio',

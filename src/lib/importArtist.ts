@@ -1,5 +1,6 @@
 import { db } from '../db/db'
 import type { Album, Artist } from '../db/types'
+import { albumUid, artistUid } from '../db/uid'
 import {
   coverArtUrl,
   countryName,
@@ -22,6 +23,7 @@ export async function createArtistFromMusicBrainz(mb: MBArtist): Promise<{ artis
   if (existing) return { artistId: existing.id!, alreadyExisted: true }
   const now = Date.now()
   const id = (await db.artists.add({
+    uid: artistUid({ mbid: mb.id, name: mb.name }),
     name: mb.name,
     country: countryName(mb.country),
     countryCode: mb.country,
@@ -64,7 +66,7 @@ export async function importDiscography(
     ? groups.filter((g) => !/^\d{4}-\d{2}-\d{2}/.test(g.title)) // sem dados de formato: tira ao menos os shows datados
     : groups.filter((g) => vinyl.has(g.id))
 
-  return db.transaction('rw', db.artists, db.albums, db.copies, async () => {
+  return db.transaction('rw', db.artists, db.albums, db.copies, db.tombstones, async () => {
     const now = Date.now()
     await db.artists.update(artistId, { discographyReviewedAt: now, updatedAt: now })
     const existing = await db.albums.where('artistId').equals(artistId).toArray()
@@ -77,6 +79,7 @@ export async function importDiscography(
           const v = vinyl.get(g.id)
           const year = g.year || Number.parseInt((v?.earliestDate ?? '').slice(0, 4), 10) || 0
           return {
+            uid: albumUid({ mbid: g.id, title: g.title, year }, artist.uid),
             artistId,
             title: g.title,
             year,
@@ -100,6 +103,7 @@ export async function importDiscography(
       const copies = new Set((await db.copies.toArray()).map((c) => c.albumId))
       const toRemove = existing.filter((a) => a.mbid && !keptIds.has(a.mbid) && a.status === 'none' && !copies.has(a.id!))
       if (toRemove.length) {
+        await db.tombstones.bulkPut(toRemove.map((a) => ({ uid: a.uid, table: 'albums' as const, deletedAt: now })))
         await db.albums.bulkDelete(toRemove.map((a) => a.id!))
         removed = toRemove.length
       }

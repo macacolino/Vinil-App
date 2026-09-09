@@ -2,7 +2,7 @@ import { useState, type FormEvent } from 'react'
 import { GRADES, GRADE_LABEL, type Copy, type Grade } from '../db/types'
 import { parseInteger, parseMoney } from '../lib/format'
 
-export type CopyFormData = Omit<Copy, 'id' | 'albumId' | 'createdAt' | 'updatedAt'>
+export type CopyFormData = Omit<Copy, 'id' | 'uid' | 'dirty' | 'albumId' | 'createdAt' | 'updatedAt'>
 
 interface Props {
   initial?: Copy

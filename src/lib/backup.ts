@@ -1,5 +1,6 @@
 import { db } from '../db/db'
 import type { Album, Artist, Copy, Setting } from '../db/types'
+import { ensureUids, wipeAll } from '../db/ops'
 
 export interface Backup {
   app: 'vinil'
@@ -18,7 +19,8 @@ export async function exportBackup(): Promise<Backup> {
     db.copies.toArray(),
     db.settings.toArray(),
   ])
-  return { app: 'vinil', version: 1, exportedAt: new Date().toISOString(), artists, albums, copies, settings }
+  const semSync = settings.filter((s) => !s.key.startsWith('sync.'))
+  return { app: 'vinil', version: 1, exportedAt: new Date().toISOString(), artists, albums, copies, settings: semSync }
 }
 
 export function downloadJson(data: unknown, filename: string) {
@@ -45,13 +47,21 @@ export function isBackup(value: unknown): value is Backup {
   )
 }
 
-/** Substitui TODOS os dados locais pelo conteúdo do backup. */
+/**
+ * Substitui TODOS os dados locais pelo conteúdo do backup. As exclusões
+ * ficam registradas para a nuvem; os registros do backup entram como
+ * alterações novas (dirty) e são enviados na próxima sincronização.
+ */
 export async function importBackup(backup: Backup) {
-  await db.transaction('rw', db.artists, db.albums, db.copies, db.settings, async () => {
-    await Promise.all([db.artists.clear(), db.albums.clear(), db.copies.clear(), db.settings.clear()])
+  ensureUids(backup.artists, backup.albums, backup.copies)
+  await wipeAll()
+  await db.transaction('rw', db.artists, db.albums, db.copies, db.settings, db.tombstones, async () => {
     await db.artists.bulkAdd(backup.artists)
     await db.albums.bulkAdd(backup.albums)
     await db.copies.bulkAdd(backup.copies)
-    await db.settings.bulkAdd(backup.settings)
+    await db.settings.bulkPut(backup.settings.filter((s) => !s.key.startsWith('sync.')))
+    // O que o backup traz de volta não deve ser apagado da nuvem.
+    const uids = [...backup.artists, ...backup.albums, ...backup.copies].map((r) => r.uid)
+    await db.tombstones.bulkDelete(uids)
   })
 }

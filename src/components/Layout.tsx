@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { NavLink, Outlet } from 'react-router-dom'
 import { useJobs } from '../lib/jobs'
+import { useSyncStatus } from '../lib/sync'
 import { JobsBar } from './JobsBar'
 
 function useOnline() {
@@ -21,6 +22,16 @@ function useOnline() {
 export function Layout() {
   const online = useOnline()
   const jobs = useJobs()
+  const sync = useSyncStatus()
+  const cloudText = !sync.user
+    ? ''
+    : sync.state === 'syncing'
+      ? '☁ sincronizando…'
+      : sync.state === 'error'
+        ? '☁ erro ao sincronizar'
+        : sync.state === 'offline'
+          ? '☁ aguardando internet'
+          : '☁ sincronizado'
   return (
     <>
       <header className="app-header">
@@ -28,7 +39,7 @@ export function Layout() {
           <img src={`${import.meta.env.BASE_URL}favicon.svg`} alt="" />
           Vinil
         </NavLink>
-        <span className={`status${online ? '' : ' offline'}`}>{online ? '' : 'offline'}</span>
+        <span className={`status${online ? '' : ' offline'}`}>{online ? cloudText : 'offline'}</span>
       </header>
       <main className="app-main" style={jobs.length ? { paddingBottom: `calc(var(--nav-h) + 24px + ${jobs.length * 56}px)` } : undefined}>
         <Outlet />

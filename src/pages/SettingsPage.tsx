@@ -4,6 +4,8 @@ import { DEFAULT_USD_TO_BRL, SETTINGS, db } from '../db/db'
 import { downloadJson, exportBackup, importBackup, isBackup } from '../lib/backup'
 import { parseMoney } from '../lib/format'
 import { restoreIronMaiden } from '../seed/seed'
+import { AccountCard } from '../components/AccountCard'
+import { wipeAll } from '../db/ops'
 
 export function SettingsPage() {
   // Embrulha o resultado para diferenciar "ainda carregando" (undefined) de "não existe" (setting undefined).
@@ -34,7 +36,7 @@ export function SettingsPage() {
       setMsg({ text: 'Cotação inválida.', ok: false })
       return
     }
-    await db.settings.put({ key: SETTINGS.usdToBrl, value: v })
+    await db.settings.put({ key: SETTINGS.usdToBrl, value: v, updatedAt: Date.now() })
     setMsg({ text: 'Cotação salva.', ok: true })
   }
 
@@ -70,9 +72,7 @@ export function SettingsPage() {
   async function doWipe() {
     if (!window.confirm('Apagar TODOS os dados do app neste aparelho? Faça um backup antes. Isso não pode ser desfeito.')) return
     if (!window.confirm('Tem certeza mesmo?')) return
-    await db.transaction('rw', db.artists, db.albums, db.copies, db.settings, async () => {
-      await Promise.all([db.artists.clear(), db.albums.clear(), db.copies.clear(), db.settings.clear()])
-    })
+    await wipeAll()
     setMsg({ text: 'Dados apagados. Use "Recolocar Iron Maiden" para começar de novo.', ok: true })
   }
 
@@ -90,6 +90,8 @@ export function SettingsPage() {
       </div>
 
       {msg && <div className={`notice${msg.ok ? ' ok' : ''}`}>{msg.text}</div>}
+
+      <AccountCard />
 
       <div className="card">
         <h2>Cotação do dólar</h2>
@@ -110,7 +112,7 @@ export function SettingsPage() {
       <div className="card">
         <h2>Backup</h2>
         <p className="muted" style={{ marginBottom: 10 }}>
-          Os dados ficam só neste navegador. Exporte um arquivo JSON de vez em quando para não perder nada.
+          Exporte um arquivo JSON de vez em quando para ter uma cópia sua, independente da nuvem.
         </p>
         <div className="btn-row">
           <button className="btn primary" onClick={doExport}>
