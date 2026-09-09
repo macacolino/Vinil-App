@@ -131,7 +131,8 @@ forma simples quando fizer sentido.
 
 ## Estado atual
 
-- Branch de trabalho: `claude/sleepy-albattani-3pi081`. Cada push nela
+- Branch de trabalho: `claude/sleepy-albattani-3pi081`; a `main` espelha
+  ela quando o usuário pede para "subir". Cada push em qualquer uma das duas
   publica o app automaticamente no GitHub Pages (1 a 2 minutos).
 - Fase 1 pronta e testada no navegador (Playwright): seed, marcar "tenho",
   formulário da cópia, biblioteca com totais, cotação, exportar/importar
@@ -208,5 +209,6 @@ forma simples quando fizer sentido.
 
 - Comandos: `npm run dev`, `npm run build`, `npm run typecheck`.
 - Commits em português, mensagens curtas e descritivas.
-- Nunca fazer push em outra branch sem permissão explícita; a `main` só
-  recebe código via pull request aprovado pelo usuário.
+- A `main` é a branch principal e recebe o código direto da branch de
+  trabalho quando o usuário pede (ele preferiu não usar pull request). Nunca
+  fazer push em outra branch sem permissão explícita.
