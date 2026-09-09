@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { db } from '../db/db'
 import { artistUid } from '../db/uid'
+import { uniqueUid } from '../db/ops'
 import { createArtistFromMusicBrainz } from '../lib/importArtist'
 import { enqueueImport } from '../lib/jobs'
 import { MusicBrainzError, countryName, searchArtists, type MBArtist } from '../lib/musicbrainz'
@@ -86,7 +87,7 @@ export function ArtistSearch({ onClose }: Props) {
 
   async function addManual(data: { name: string; country?: string; notes?: string }) {
     const now = Date.now()
-    const id = await db.artists.add({ ...data, uid: artistUid(data), createdAt: now, updatedAt: now })
+    const id = await db.artists.add({ ...data, uid: await uniqueUid('artists', artistUid(data)), createdAt: now, updatedAt: now })
     navigate(`/artistas/${id}`)
   }
 

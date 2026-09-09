@@ -81,3 +81,10 @@ export function ensureUids(artists: Artist[], albums: Album[], copies: Copy[]) {
   }
   for (const c of copies) c.uid = c.uid || copyUid(albumUidById.get(c.albumId) ?? 'a-')
 }
+
+/** Garante que um uid gerado por nome/título não colida com um já existente. */
+export async function uniqueUid(table: 'artists' | 'albums', base: string): Promise<string> {
+  let candidate = base
+  for (let n = 2; await db[table].where('uid').equals(candidate).count(); n++) candidate = `${base}-${n}`
+  return candidate
+}

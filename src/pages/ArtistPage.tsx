@@ -6,7 +6,7 @@ import { AlbumForm, type AlbumFormData } from '../components/AlbumForm'
 import { ArtistForm } from '../components/ArtistForm'
 import { SortFilter, sortAlbums, type SortKey } from '../components/SortFilter'
 import { db } from '../db/db'
-import { deleteArtistWithAlbums } from '../db/ops'
+import { deleteArtistWithAlbums, uniqueUid } from '../db/ops'
 import { albumUid } from '../db/uid'
 import { ALBUM_TYPES, ALBUM_TYPE_LABEL, type Album, type AlbumStatus } from '../db/types'
 import { needsTracks } from '../lib/importArtist'
@@ -70,7 +70,7 @@ export function ArtistPage() {
 
   async function addAlbum(data: AlbumFormData) {
     const now = Date.now()
-    const album: Album = { ...data, uid: albumUid(data, artist!.uid), artistId, status: 'none', createdAt: now, updatedAt: now }
+    const album: Album = { ...data, uid: await uniqueUid('albums', albumUid(data, artist!.uid)), artistId, status: 'none', createdAt: now, updatedAt: now }
     const newId = await db.albums.add(album)
     setMode('view')
     navigate(`/albuns/${newId}`)

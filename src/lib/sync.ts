@@ -312,12 +312,12 @@ export async function syncNow(): Promise<void> {
 // Ganchos para os testes automatizados trocarem o Supabase por um provedor falso.
 declare global {
   interface Window {
-    __vinil?: { setCloudProvider: (p: CloudProvider | null) => void; syncNow: () => Promise<void>; db: typeof db }
+    __vinil?: { setCloudProvider: (p: CloudProvider | null) => void; syncNow: () => Promise<void>; db: typeof db; syncStatus: () => SyncStatus }
   }
 }
 if (import.meta.env.VITE_TEST_HOOKS === '1') {
   import('./cloud').then(({ setCloudProvider }) => {
-    window.__vinil = { setCloudProvider, syncNow, db }
+    window.__vinil = { setCloudProvider, syncNow, db, syncStatus: () => status }
   })
 }
 

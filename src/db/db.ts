@@ -50,16 +50,27 @@ export class VinilDB extends Dexie {
         tombstones: 'uid',
       })
       .upgrade(async (tx) => {
+        // Gravações desta migração não passam pelo carimbo de dirty/updatedAt.
+        ;(tx as Transaction & { fromSync?: boolean }).fromSync = true
         const artists = tx.table<Artist>('artists')
         const albums = tx.table<Album>('albums')
         const copies = tx.table<Copy>('copies')
+        // uid é único: se dois registros gerarem o mesmo (ex.: dois artistas
+        // cadastrados à mão com o mesmo nome), o segundo recebe um sufixo.
+        const used = new Set<string>()
+        const unique = (uid: string) => {
+          let candidate = uid
+          for (let n = 2; used.has(candidate); n++) candidate = `${uid}-${n}`
+          used.add(candidate)
+          return candidate
+        }
         // Dados pré-carregados que o usuário nunca mexeu recebem a data fixa
         // do seed e dirty = 0 (todo aparelho já tem a mesma lista). O resto
         // é marcado para envio à nuvem.
         const artistUidById = new Map<number, string>()
         let seedArtistId: number | undefined
         await artists.toCollection().modify((a: Artist) => {
-          a.uid = artistUid(a)
+          a.uid = unique(artistUid(a))
           const isSeed = a.mbid === IRON_MAIDEN_MBID
           if (isSeed) seedArtistId = a.id
           const untouched = isSeed && a.updatedAt === a.createdAt
@@ -67,16 +78,18 @@ export class VinilDB extends Dexie {
           if (untouched) a.updatedAt = SEED_TIMESTAMP
           artistUidById.set(a.id!, a.uid)
         })
+        used.clear()
         const albumUidById = new Map<number, string>()
         await albums.toCollection().modify((al: Album) => {
-          al.uid = albumUid(al, artistUidById.get(al.artistId) ?? 'n-')
+          al.uid = unique(albumUid(al, artistUidById.get(al.artistId) ?? 'n-'))
           const untouched = al.artistId === seedArtistId && al.updatedAt === al.createdAt && al.status === 'none'
           al.dirty = untouched ? 0 : 1
           if (untouched) al.updatedAt = SEED_TIMESTAMP
           albumUidById.set(al.id!, al.uid)
         })
+        used.clear()
         await copies.toCollection().modify((c: Copy) => {
-          c.uid = copyUid(albumUidById.get(c.albumId) ?? 'a-')
+          c.uid = unique(copyUid(albumUidById.get(c.albumId) ?? 'a-'))
           c.dirty = 1
         })
         await tx.table<Setting>('settings').toCollection().modify((st: Setting) => {
