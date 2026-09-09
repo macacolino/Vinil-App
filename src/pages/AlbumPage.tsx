@@ -1,5 +1,5 @@
 import { useLiveQuery } from 'dexie-react-hooks'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { AlbumForm, type AlbumFormData } from '../components/AlbumForm'
 import { CopyForm, type CopyFormData } from '../components/CopyForm'
@@ -8,6 +8,7 @@ import { Rarity } from '../components/Rarity'
 import { db } from '../db/db'
 import { ALBUM_TYPE_LABEL, GRADE_LABEL, type AlbumStatus } from '../db/types'
 import { formatBRL, formatDate, formatDuration, formatUSD, useUsdToBrl } from '../lib/format'
+import { loadAlbumTracks, needsTracks } from '../lib/importArtist'
 
 export function AlbumPage() {
   const { id } = useParams()
@@ -16,10 +17,34 @@ export function AlbumPage() {
   const rate = useUsdToBrl()
   const [editing, setEditing] = useState(false)
   const [editingCopy, setEditingCopy] = useState(false)
+  const [tracksState, setTracksState] = useState<'idle' | 'loading' | 'error' | 'empty'>('idle')
+  const [tracksError, setTracksError] = useState<string | null>(null)
 
   const album = useLiveQuery(() => db.albums.get(albumId), [albumId])
   const artist = useLiveQuery(() => (album ? db.artists.get(album.artistId) : undefined), [album?.artistId])
   const copy = useLiveQuery(() => db.copies.where('albumId').equals(albumId).first(), [albumId])
+
+  const shouldFetchTracks = !!album && needsTracks(album) && artist !== undefined
+  const artistCountryCode = artist?.countryCode
+
+  async function fetchTracksNow(force = false) {
+    if (!album || !album.mbid) return
+    setTracksState('loading')
+    setTracksError(null)
+    try {
+      const n = await loadAlbumTracks(force ? { ...album, tracksCheckedAt: undefined } : album, artistCountryCode)
+      setTracksState(n > 0 ? 'idle' : 'empty')
+    } catch (err) {
+      setTracksState('error')
+      setTracksError(err instanceof Error ? err.message : String(err))
+    }
+  }
+
+  // Álbum importado sem faixas: busca no MusicBrainz ao abrir a página (uma vez).
+  useEffect(() => {
+    if (shouldFetchTracks && tracksState === 'idle') void fetchTracksNow()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [shouldFetchTracks, album?.id])
 
   if (album === undefined) return <p className="empty">Carregando…</p>
   if (album === null) return <p className="empty">Álbum não encontrado.</p>
@@ -180,7 +205,29 @@ export function AlbumPage() {
           <div className="card">
             <h2>Faixas</h2>
             {album.tracks.length === 0 ? (
-              <p className="muted">Nenhuma faixa cadastrada.</p>
+              tracksState === 'loading' ? (
+                <div className="progress-line" style={{ marginTop: 0 }}>
+                  <span className="spinner" />
+                  Buscando faixas no MusicBrainz…
+                </div>
+              ) : (
+                <>
+                  <p className="muted">
+                    {tracksState === 'error'
+                      ? tracksError
+                      : tracksState === 'empty'
+                        ? 'O MusicBrainz não tem as faixas deste lançamento. Você pode digitá-las em "Editar".'
+                        : 'Nenhuma faixa cadastrada.'}
+                  </p>
+                  {album.mbid && (
+                    <div className="btn-row">
+                      <button className="btn small" onClick={() => fetchTracksNow(true)}>
+                        Buscar faixas no MusicBrainz
+                      </button>
+                    </div>
+                  )}
+                </>
+              )
             ) : (
               <ol className="tracks">
                 {album.tracks.map((t, i) => (

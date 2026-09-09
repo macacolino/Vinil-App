@@ -2,6 +2,8 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Cover } from '../components/Cover'
+import { Rarity } from '../components/Rarity'
+import { SortFilter, sortAlbums, type SortKey } from '../components/SortFilter'
 import { db } from '../db/db'
 import { ALBUM_TYPES, ALBUM_TYPE_LABEL, GRADES, type AlbumType, type Grade } from '../db/types'
 import { formatBRL, formatUSD, useUsdToBrl } from '../lib/format'
@@ -12,6 +14,8 @@ export function LibraryPage() {
   const [artistFilter, setArtistFilter] = useState<number | 'all'>('all')
   const [typeFilter, setTypeFilter] = useState<AlbumType | 'all'>('all')
   const [gradeFilter, setGradeFilter] = useState<Grade | 'all'>('all')
+  const [sort, setSort] = useState<SortKey>('year')
+  const [minRarity, setMinRarity] = useState(0)
 
   const artists = useLiveQuery(() => db.artists.orderBy('name').toArray(), [])
   const albums = useLiveQuery(() => db.albums.where('status').equals('have').toArray(), [])
@@ -29,6 +33,7 @@ export function LibraryPage() {
         if (artistFilter !== 'all' && album.artistId !== artistFilter) return false
         if (typeFilter !== 'all' && album.type !== typeFilter) return false
         if (gradeFilter !== 'all' && copy?.mediaCondition !== gradeFilter) return false
+        if (album.rarity < minRarity) return false
         if (q) {
           const hay = `${album.title} ${artist?.name ?? ''} ${album.year} ${album.label ?? ''}`.toLowerCase()
           if (!hay.includes(q)) return false
@@ -42,16 +47,20 @@ export function LibraryPage() {
     const groups = artists
       .map((artist) => ({
         artist,
-        items: items.filter((i) => i.album.artistId === artist.id).sort((a, b) => a.album.year - b.album.year),
+        items: sortAlbums(
+          items.filter((i) => i.album.artistId === artist.id),
+          sort,
+          (i) => i.album,
+        ),
       }))
       .filter((g) => g.items.length)
 
     return { items, totalPaid, totalEstUsd, groups }
-  }, [artists, albums, copies, search, artistFilter, typeFilter, gradeFilter])
+  }, [artists, albums, copies, search, artistFilter, typeFilter, gradeFilter, sort, minRarity])
 
   if (!data) return <p className="empty">Carregando…</p>
 
-  const filtering = search || artistFilter !== 'all' || typeFilter !== 'all' || gradeFilter !== 'all'
+  const filtering = search || artistFilter !== 'all' || typeFilter !== 'all' || gradeFilter !== 'all' || minRarity > 0
 
   return (
     <>
@@ -106,6 +115,7 @@ export function LibraryPage() {
           ))}
         </select>
       </div>
+      <SortFilter sort={sort} onSort={setSort} minRarity={minRarity} onMinRarity={setMinRarity} />
 
       {data.groups.length === 0 ? (
         <p className="empty">
@@ -129,9 +139,12 @@ export function LibraryPage() {
                 <Link key={album.id} to={`/albuns/${album.id}`} className="list-item">
                   <Cover src={album.coverUrl} alt={album.title} size="small" />
                   <div className="grow">
-                    <div className="name">{album.title}</div>
+                    <div className="name">
+                      <span>{album.title}</span>
+                      <Rarity value={album.rarity} size="small" />
+                    </div>
                     <div className="meta">
-                      {album.year} · {ALBUM_TYPE_LABEL[album.type]}
+                      {album.year || 's/ ano'} · {ALBUM_TYPE_LABEL[album.type]}
                       {copy?.mediaCondition ? ` · ${copy.mediaCondition}/${copy.sleeveCondition ?? '—'}` : ''}
                       {copy?.pricePaidBrl != null ? ` · ${formatBRL(copy.pricePaidBrl)}` : ''}
                     </div>

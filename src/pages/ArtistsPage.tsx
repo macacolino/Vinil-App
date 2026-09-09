@@ -1,11 +1,10 @@
 import { useLiveQuery } from 'dexie-react-hooks'
 import { useMemo, useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
-import { ArtistForm } from '../components/ArtistForm'
+import { Link } from 'react-router-dom'
+import { ArtistSearch } from '../components/ArtistSearch'
 import { db } from '../db/db'
 
 export function ArtistsPage() {
-  const navigate = useNavigate()
   const [adding, setAdding] = useState(false)
   const [search, setSearch] = useState('')
 
@@ -31,13 +30,6 @@ export function ArtistsPage() {
   const totalHave = rows?.reduce((s, r) => s + r.have, 0) ?? 0
   const totalAlbums = rows?.reduce((s, r) => s + r.total, 0) ?? 0
 
-  async function addArtist(data: { name: string; country?: string; notes?: string }) {
-    const now = Date.now()
-    const id = await db.artists.add({ ...data, createdAt: now, updatedAt: now })
-    setAdding(false)
-    navigate(`/artistas/${id}`)
-  }
-
   return (
     <>
       <div className="page-title">
@@ -55,15 +47,10 @@ export function ArtistsPage() {
         )}
       </div>
 
-      {adding && (
-        <div className="card">
-          <h2>Novo artista</h2>
-          <ArtistForm onSave={addArtist} onCancel={() => setAdding(false)} />
-        </div>
-      )}
+      {adding && <ArtistSearch onClose={() => setAdding(false)} />}
 
       {rows && rows.length > 3 && (
-        <input className="search" placeholder="Buscar artista…" value={search} onChange={(e) => setSearch(e.target.value)} />
+        <input className="search" placeholder="Filtrar meus artistas…" value={search} onChange={(e) => setSearch(e.target.value)} />
       )}
 
       {rows === undefined ? (

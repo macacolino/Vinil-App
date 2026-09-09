@@ -20,6 +20,11 @@ export class VinilDB extends Dexie {
       copies: '++id, &albumId',
       settings: 'key',
     })
+    // v2: índices para o MBID (importação do MusicBrainz) e raridade.
+    this.version(2).stores({
+      artists: '++id, name, mbid',
+      albums: '++id, artistId, status, year, title, rarity, mbid, [artistId+year]',
+    })
     // Roda só na primeira vez que o banco é criado neste navegador.
     this.on('populate', () => seedIronMaiden(this))
   }

@@ -19,6 +19,8 @@ export interface Artist {
   id?: number
   name: string
   country?: string
+  /** Código ISO do país (ex.: GB), usado para escolher a edição de referência. */
+  countryCode?: string
   notes?: string
   /** Chaves em fontes externas (fase 3). */
   mbid?: string
@@ -44,6 +46,8 @@ export interface Album {
   status: AlbumStatus
   mbid?: string
   discogsId?: number
+  /** Quando as faixas foram consultadas no MusicBrainz (evita repetir a busca). */
+  tracksCheckedAt?: number
   createdAt: number
   updatedAt: number
 }
@@ -91,6 +95,14 @@ export const GRADE_LABEL: Record<Grade, string> = {
   G: 'Good (bastante uso)',
   F: 'Fair (ruim)',
   P: 'Poor (péssimo)',
+}
+
+export const RARITY_LABEL: Record<number, string> = {
+  1: 'Comum, fácil de achar',
+  2: 'Normal, aparece com frequência',
+  3: 'Incomum, exige procurar',
+  4: 'Raro, poucas cópias no mercado',
+  5: 'Raríssimo, item de colecionador',
 }
 
 export const STATUS_LABEL: Record<AlbumStatus, string> = {
