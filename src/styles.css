@@ -333,6 +333,7 @@ p { margin: 0; }
 @keyframes spin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .spinner { animation: none; } }
 .toolbar { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 12px; }
+.toolbar .chip { padding: 8px 12px; }
 .toolbar select {
   padding: 8px 10px;
   border-radius: 10px;
