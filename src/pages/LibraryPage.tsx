@@ -38,8 +38,28 @@ function sortItems(items: Item[], sort: LibrarySort, rate: number): Item[] {
   })
 }
 
+const EXPANDED_KEY = 'vinil.biblioteca.abertos'
+
+function loadExpanded(): Set<number> {
+  try {
+    const raw = localStorage.getItem(EXPANDED_KEY)
+    return new Set(raw ? (JSON.parse(raw) as number[]) : [])
+  } catch {
+    return new Set()
+  }
+}
+
+function saveExpanded(set: Set<number>) {
+  try {
+    localStorage.setItem(EXPANDED_KEY, JSON.stringify([...set]))
+  } catch {
+    /* sem armazenamento: só não lembra */
+  }
+}
+
 export function LibraryPage() {
   const rate = useUsdToBrl()
+  const [expanded, setExpanded] = useState<Set<number>>(loadExpanded)
   const [search, setSearch] = useState('')
   const [sort, setSort] = useState<LibrarySort>('year')
   const [showFilters, setShowFilters] = useState(false)
@@ -86,6 +106,18 @@ export function LibraryPage() {
 
   const activeFilters = [artistFilter !== 'all', typeFilter !== 'all', gradeFilter !== 'all', minRarity > 0].filter(Boolean).length
   const filtering = !!search || activeFilters > 0
+
+  function toggle(artistId: number) {
+    setExpanded((prev) => {
+      const next = new Set(prev)
+      if (next.has(artistId)) next.delete(artistId)
+      else next.add(artistId)
+      saveExpanded(next)
+      return next
+    })
+  }
+  // Com busca digitada, mostra os resultados sem precisar abrir grupo por grupo.
+  const searching = search.trim().length > 0
 
   function clearFilters() {
     setArtistFilter('all')
@@ -171,34 +203,45 @@ export function LibraryPage() {
             : 'Nada encontrado com esses filtros.'}
         </p>
       ) : (
-        data.groups.map(({ artist, items }) => (
-          <section key={artist.id}>
-            <div className="section-title">
-              <h2>
-                <Link to={`/artistas/${artist.id}`}>{artist.name}</Link>
-              </h2>
-              <span className="count">{items.length}</span>
-            </div>
-            <div className="list">
-              {items.map(({ album, copy }) => (
-                <Link key={album.id} to={`/albuns/${album.id}`} className="list-item">
-                  <Cover sources={listSources(album)} alt={album.title} size="small" />
-                  <div className="grow">
-                    <div className="name">
-                      <span>{album.title}</span>
-                      <Rarity value={album.rarity} size="small" />
-                    </div>
-                    <div className="meta">
-                      {album.year || 's/ ano'} · {ALBUM_TYPE_LABEL[album.type]}
-                      {copy?.mediaCondition ? ` · ${copy.mediaCondition}/${copy.sleeveCondition ?? '—'}` : ''}
-                    </div>
+        data.groups.map(({ artist, items }) => {
+          const open = searching || expanded.has(artist.id!)
+          return (
+            <section key={artist.id} className="lib-group">
+              <button className={`lib-group-head${open ? ' open' : ''}`} onClick={() => toggle(artist.id!)} aria-expanded={open}>
+                <Cover sources={[artist.imageUrl]} alt={artist.name} size="small" />
+                <div className="grow">
+                  <div className="name">{artist.name}</div>
+                  <div className="meta">
+                    {items.length} {items.length === 1 ? 'disco' : 'discos'}
                   </div>
-                  <span className="chevron">›</span>
-                </Link>
-              ))}
-            </div>
-          </section>
-        ))
+                </div>
+                <span className="chevron lib-chevron" aria-hidden="true">
+                  ›
+                </span>
+              </button>
+              {open && (
+                <div className="list lib-items">
+                  {items.map(({ album, copy }) => (
+                    <Link key={album.id} to={`/albuns/${album.id}`} className="list-item">
+                      <Cover sources={listSources(album)} alt={album.title} size="small" />
+                      <div className="grow">
+                        <div className="name">
+                          <span>{album.title}</span>
+                          <Rarity value={album.rarity} size="small" />
+                        </div>
+                        <div className="meta">
+                          {album.year || 's/ ano'} · {ALBUM_TYPE_LABEL[album.type]}
+                          {copy?.mediaCondition ? ` · ${copy.mediaCondition}/${copy.sleeveCondition ?? '—'}` : ''}
+                        </div>
+                      </div>
+                      <span className="chevron">›</span>
+                    </Link>
+                  ))}
+                </div>
+              )}
+            </section>
+          )
+        })
       )}
     </>
   )
