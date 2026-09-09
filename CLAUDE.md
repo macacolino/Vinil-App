@@ -81,9 +81,14 @@ forma simples quando fizer sentido.
 - **Fase 1 (concluída)**: esqueleto Vite + React + TS, Dexie, PWA,
   páginas Artistas / Artista / Álbum / Biblioteca / Configurações, dados do
   Iron Maiden pré-carregados, tudo funcionando offline sem conta nenhuma.
-- **Fase 2 (código pronto, falta o projeto no Supabase)**: login e
-  sincronização. Testada com dois "aparelhos" e uma nuvem falsa em memória
-  (Playwright), incluindo migração v3→v4, exclusões, conflito e sair/entrar.
+- **Fase 2 (concluída)**: login e sincronização com Supabase (projeto
+  `lxaqiarpkixiakicpysn`, região São Paulo). Testada com dois "aparelhos" e
+  uma nuvem falsa em memória (Playwright), incluindo migração v3→v4,
+  exclusões, conflito e sair/entrar, e o esquema real foi validado via REST
+  (RLS, trigger de synced_at, upsert). O secret `VITE_SUPABASE_URL` no GitHub
+  ficou com a URL do site por engano; por isso `cloud.ts` deduz o endereço a
+  partir do `ref` contido na chave anon quando a variável não parece uma URL
+  do Supabase. Só a chave anon é realmente necessária.
 - **Fase 3**: preço estimado e raridade automáticos (Discogs marketplace
   stats), refinamentos da importação (filtrar só edições em vinil).
 - **Fase 4 (concluída)**: deploy automático no GitHub Pages; instalar no
@@ -103,13 +108,12 @@ forma simples quando fizer sentido.
 - A prévia publicada como Artifact (build com `VITE_STATIC_DEMO=1`) não tem
   acesso à internet: a busca de artistas mostra um aviso nela. Só funciona
   no app publicado de verdade (fase 4).
-- Para ativar a nuvem (passos do usuário): criar projeto no Supabase; rodar
-  `supabase/schema.sql` no SQL Editor; em Authentication > Providers > Email
-  desligar "Confirm email" (opcional, simplifica); em Authentication > URL
-  Configuration pôr a URL do app como Site URL; copiar Project URL e anon key
-  (Settings > API) para os secrets do GitHub `VITE_SUPABASE_URL` e
-  `VITE_SUPABASE_ANON_KEY`; rodar o workflow de novo. Sem as chaves o app
-  funciona normalmente, só sem o card de login.
+- Nuvem ativa: esquema aplicado, "Confirm email" desligado, cadastro aberto.
+  Para recriar em outro projeto: rodar `supabase/schema.sql` no SQL Editor,
+  desligar "Confirm email", pôr a URL do app em Site URL e colocar a chave
+  anon no secret `VITE_SUPABASE_ANON_KEY` (e, se quiser, a Project URL em
+  `VITE_SUPABASE_URL`). Sem as chaves o app funciona normalmente, só sem o
+  card de login. Nunca guardar a senha do banco no repositório ou no chat.
 - Banco Dexie na versão 4 (v4: `uid`, `dirty`, tabela `tombstones`).
 - Acesso de rede a MusicBrainz, Discogs e iTunes confirmado com `curl`
   (HTTP 200). O Chromium do ambiente de testes NÃO tem saída para internet,
