@@ -53,6 +53,12 @@ forma simples quando fizer sentido.
 - **Moedas**: preço estimado do disco mostrado em USD e convertido para BRL
   (cotação ajustável em Configurações). Valor pago pelo usuário sempre em BRL.
 - **Local de compra**: apenas cidade e país.
+- **Valor pago** fica só no formulário da cópia: não aparece em nenhuma
+  visualização (biblioteca, página do álbum), por pedido do usuário. Os
+  totais mostram apenas o valor estimado.
+- **Importação do MusicBrainz**: a busca paginada pode repetir lançamentos
+  entre páginas (deu `ConstraintError` de uid nos Beatles); `fetchDiscography`
+  e `importDiscography` removem repetidos antes do `bulkAdd`.
 
 ## Funcionalidades combinadas
 

@@ -204,6 +204,9 @@ export async function fetchDiscography(
 ): Promise<MBReleaseGroup[]> {
   const query = `arid:${artistMbid} AND status:official AND primarytype:(album OR ep)`
   const out: MBReleaseGroup[] = []
+  // A busca é paginada por relevância; entre uma página e outra o mesmo
+  // lançamento pode aparecer duas vezes (deu erro de uid duplicado nos Beatles).
+  const seen = new Set<string>()
   let offset = 0
   let total = Infinity
   while (offset < total) {
@@ -214,6 +217,8 @@ export async function fetchDiscography(
     )
     total = page.count
     for (const rg of page['release-groups']) {
+      if (seen.has(rg.id)) continue
+      seen.add(rg.id)
       const type = classify(rg['primary-type'], rg['secondary-types'] ?? [])
       if (!type) continue
       const date = rg['first-release-date'] ?? ''

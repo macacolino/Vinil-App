@@ -297,8 +297,6 @@ export function AlbumPage() {
                   <dd title={copy.mediaCondition ? GRADE_LABEL[copy.mediaCondition] : ''}>{copy.mediaCondition ?? '—'}</dd>
                   <dt>Capa</dt>
                   <dd title={copy.sleeveCondition ? GRADE_LABEL[copy.sleeveCondition] : ''}>{copy.sleeveCondition ?? '—'}</dd>
-                  <dt>Valor pago</dt>
-                  <dd>{formatBRL(copy.pricePaidBrl)}</dd>
                   <dt>Compra</dt>
                   <dd>
                     {[copy.purchaseCity, copy.purchaseCountry].filter(Boolean).join(', ') || '—'}

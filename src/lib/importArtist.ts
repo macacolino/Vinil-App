@@ -74,7 +74,12 @@ export async function importDiscography(
     const existing = await db.albums.where('artistId').equals(artistId).toArray()
     const knownMbids = new Set(existing.map((a) => a.mbid).filter(Boolean))
     const knownTitles = new Set(existing.map((a) => `${a.title.toLowerCase()}|${a.year}`))
-    const fresh = kept.filter((g) => !knownMbids.has(g.id) && !knownTitles.has(`${g.title.toLowerCase()}|${g.year}`))
+    const batchIds = new Set<string>()
+    const fresh = kept.filter((g) => {
+      if (knownMbids.has(g.id) || knownTitles.has(`${g.title.toLowerCase()}|${g.year}`) || batchIds.has(g.id)) return false
+      batchIds.add(g.id)
+      return true
+    })
     if (fresh.length) {
       await db.albums.bulkAdd(
         fresh.map<Album>((g) => {

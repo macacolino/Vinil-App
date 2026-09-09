@@ -7,13 +7,12 @@ import { db } from '../db/db'
 import { ALBUM_TYPES, ALBUM_TYPE_LABEL, GRADES, type Album, type AlbumType, type Copy, type Grade } from '../db/types'
 import { formatBRL, formatUSD, useUsdToBrl } from '../lib/format'
 
-type LibrarySort = 'year' | 'rarity' | 'title' | 'paid' | 'estimated'
+type LibrarySort = 'year' | 'rarity' | 'title' | 'estimated'
 
 const SORT_LABEL: Record<LibrarySort, string> = {
   year: 'ano',
   rarity: 'mais raros',
   title: 'título',
-  paid: 'valor pago',
   estimated: 'valor estimado',
 }
 
@@ -24,7 +23,6 @@ interface Item {
 
 function sortItems(items: Item[], sort: LibrarySort, rate: number): Item[] {
   const est = (i: Item) => (i.album.estimatedPriceUsd ?? 0) * rate
-  const paid = (i: Item) => i.copy?.pricePaidBrl ?? 0
   const byTitle = (a: Item, b: Item) => a.album.title.localeCompare(b.album.title, 'pt-BR')
   return [...items].sort((a, b) => {
     switch (sort) {
@@ -32,8 +30,6 @@ function sortItems(items: Item[], sort: LibrarySort, rate: number): Item[] {
         return b.album.rarity - a.album.rarity || a.album.year - b.album.year
       case 'title':
         return byTitle(a, b)
-      case 'paid':
-        return paid(b) - paid(a) || byTitle(a, b)
       case 'estimated':
         return est(b) - est(a) || byTitle(a, b)
       default:
@@ -77,14 +73,13 @@ export function LibraryPage() {
         return true
       })
 
-    const totalPaid = items.reduce((s, { copy }) => s + (copy?.pricePaidBrl ?? 0), 0)
     const totalEstUsd = items.reduce((s, { album }) => s + (album.estimatedPriceUsd ?? 0), 0)
 
     const groups = artists
       .map((artist) => ({ artist, items: sortItems(items.filter((i) => i.album.artistId === artist.id), sort, rate) }))
       .filter((g) => g.items.length)
 
-    return { items, totalPaid, totalEstUsd, groups }
+    return { items, totalEstUsd, groups }
   }, [artists, albums, copies, search, artistFilter, typeFilter, gradeFilter, sort, minRarity, rate])
 
   if (!data) return <p className="empty">Carregando…</p>
@@ -106,7 +101,7 @@ export function LibraryPage() {
           <h1>Biblioteca</h1>
           <p className="subtitle">
             {data.items.length} {data.items.length === 1 ? 'disco' : 'discos'}
-            {filtering ? ' (com filtro)' : ''} · pago {formatBRL(data.totalPaid)} · estimado {formatBRL(data.totalEstUsd * rate)}{' '}
+            {filtering ? ' (com filtro)' : ''} · estimado {formatBRL(data.totalEstUsd * rate)}{' '}
             <span title={formatUSD(data.totalEstUsd)}>({formatUSD(data.totalEstUsd)})</span>
           </p>
         </div>
@@ -182,9 +177,7 @@ export function LibraryPage() {
               <h2>
                 <Link to={`/artistas/${artist.id}`}>{artist.name}</Link>
               </h2>
-              <span className="count">
-                {items.length} · pago {formatBRL(items.reduce((s, i) => s + (i.copy?.pricePaidBrl ?? 0), 0))}
-              </span>
+              <span className="count">{items.length}</span>
             </div>
             <div className="list">
               {items.map(({ album, copy }) => (
@@ -198,7 +191,6 @@ export function LibraryPage() {
                     <div className="meta">
                       {album.year || 's/ ano'} · {ALBUM_TYPE_LABEL[album.type]}
                       {copy?.mediaCondition ? ` · ${copy.mediaCondition}/${copy.sleeveCondition ?? '—'}` : ''}
-                      {copy?.pricePaidBrl != null ? ` · ${formatBRL(copy.pricePaidBrl)}` : ''}
                     </div>
                   </div>
                   <span className="chevron">›</span>
