@@ -2,7 +2,8 @@ import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { db } from '../db/db'
 import { importArtistFromMusicBrainz } from '../lib/importArtist'
-import { countryName, searchArtists, type MBArtist } from '../lib/musicbrainz'
+import { enqueueTracks } from '../lib/jobs'
+import { MusicBrainzError, countryName, searchArtists, type MBArtist } from '../lib/musicbrainz'
 import { ArtistForm } from './ArtistForm'
 
 interface Props {
@@ -31,23 +32,29 @@ export function ArtistSearch({ onClose }: Props) {
   const [manual, setManual] = useState(false)
   const [importing, setImporting] = useState<string | null>(null)
   const requestId = useRef(0)
+  const controller = useRef<AbortController | null>(null)
 
-  // Busca com pequeno atraso para não disparar uma requisição por tecla.
+  // Busca com pequeno atraso para não disparar uma requisição por tecla e
+  // cancela a busca anterior se o usuário continuar digitando.
   useEffect(() => {
     const q = query.trim()
+    controller.current?.abort()
     if (q.length < 2) {
       setResults([])
       setSearching(false)
       return
     }
     const id = ++requestId.current
+    const ac = new AbortController()
+    controller.current = ac
     setSearching(true)
     setError(null)
     const timer = setTimeout(async () => {
       try {
-        const found = await searchArtists(q)
+        const found = await searchArtists(q, ac.signal)
         if (id === requestId.current) setResults(found)
       } catch (err) {
+        if (err instanceof MusicBrainzError && err.kind === 'aborted') return
         if (id === requestId.current) {
           setResults([])
           setError(err instanceof Error ? err.message : String(err))
@@ -55,8 +62,11 @@ export function ArtistSearch({ onClose }: Props) {
       } finally {
         if (id === requestId.current) setSearching(false)
       }
-    }, 450)
-    return () => clearTimeout(timer)
+    }, 300)
+    return () => {
+      clearTimeout(timer)
+      ac.abort()
+    }
   }, [query])
 
   async function choose(mb: MBArtist) {
@@ -64,6 +74,8 @@ export function ArtistSearch({ onClose }: Props) {
     setImporting(`Importando ${mb.name}…`)
     try {
       const result = await importArtistFromMusicBrainz(mb, setImporting)
+      // Faixas e gravadoras vêm em segundo plano, sem travar o app.
+      enqueueTracks(result.artistId, mb.name)
       navigate(`/artistas/${result.artistId}`, {
         state: {
           imported: result.added,

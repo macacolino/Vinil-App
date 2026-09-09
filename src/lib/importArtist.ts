@@ -1,6 +1,6 @@
 import { db } from '../db/db'
 import type { Album, Artist } from '../db/types'
-import { coverArtUrl, countryName, fetchDiscography, fetchTracks, type MBArtist } from './musicbrainz'
+import { coverArtUrl, countryName, fetchDiscography, fetchTracks, type MBArtist, type Priority } from './musicbrainz'
 
 /** Raridade padrão para álbuns importados (o usuário ajusta depois). */
 export const DEFAULT_IMPORTED_RARITY = 2
@@ -67,9 +67,9 @@ export async function importArtistFromMusicBrainz(
  * Busca as faixas (e a gravadora, se estiver vazia) de um álbum importado
  * e grava no banco. Devolve quantas faixas foram gravadas.
  */
-export async function loadAlbumTracks(album: Album, artistCountryCode?: string): Promise<number> {
+export async function loadAlbumTracks(album: Album, artistCountryCode?: string, priority: Priority = 'high'): Promise<number> {
   if (!album.mbid || !album.id) return 0
-  const result = await fetchTracks(album.mbid, artistCountryCode)
+  const result = await fetchTracks(album.mbid, artistCountryCode, priority)
   const patch: Partial<Album> = { tracksCheckedAt: Date.now(), updatedAt: Date.now() }
   if (result && result.tracks.length) patch.tracks = result.tracks
   if (result?.label && !album.label) patch.label = result.label

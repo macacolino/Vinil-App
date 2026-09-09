@@ -12,32 +12,68 @@ const isStaticDemo = import.meta.env.VITE_STATIC_DEMO === '1'
 export class MusicBrainzError extends Error {
   constructor(
     message: string,
-    public readonly kind: 'offline' | 'busy' | 'http' | 'demo',
+    public readonly kind: 'offline' | 'busy' | 'http' | 'demo' | 'aborted',
   ) {
     super(message)
   }
 }
 
+export type Priority = 'high' | 'low'
+
+interface RequestOptions {
+  /** "high" = o usuário está esperando (busca, abrir álbum); fura a fila. "low" = segundo plano. */
+  priority?: Priority
+  signal?: AbortSignal
+}
+
+interface Pending {
+  priority: Priority
+  run: () => Promise<void>
+}
+
+// Fila com prioridade: garante o intervalo mínimo entre requisições e sempre
+// atende primeiro as chamadas em que o usuário está esperando.
 let lastRequestAt = 0
-let queue: Promise<unknown> = Promise.resolve()
+let draining = false
+const pending: Pending[] = []
 
 function sleep(ms: number) {
   return new Promise((r) => setTimeout(r, ms))
 }
 
-/** Executa uma requisição respeitando o intervalo mínimo entre chamadas. */
-function throttled<T>(fn: () => Promise<T>): Promise<T> {
-  const run = queue.then(async () => {
-    const wait = lastRequestAt + MIN_INTERVAL_MS - Date.now()
-    if (wait > 0) await sleep(wait)
-    lastRequestAt = Date.now()
-    return fn()
-  })
-  queue = run.catch(() => undefined)
-  return run
+async function drain() {
+  if (draining) return
+  draining = true
+  try {
+    while (pending.length) {
+      const idx = pending.findIndex((p) => p.priority === 'high')
+      const next = pending.splice(idx >= 0 ? idx : 0, 1)[0]
+      const wait = lastRequestAt + MIN_INTERVAL_MS - Date.now()
+      if (wait > 0) await sleep(wait)
+      lastRequestAt = Date.now()
+      await next.run()
+    }
+  } finally {
+    draining = false
+  }
 }
 
-async function mbGet<T>(path: string, params: Record<string, string>): Promise<T> {
+function scheduled<T>(priority: Priority, fn: () => Promise<T>): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    pending.push({
+      priority,
+      run: () => fn().then(resolve, reject),
+    })
+    void drain()
+  })
+}
+
+function abortError() {
+  return new MusicBrainzError('Busca cancelada.', 'aborted')
+}
+
+async function mbGet<T>(path: string, params: Record<string, string>, opts: RequestOptions = {}): Promise<T> {
+  const { priority = 'high', signal } = opts
   if (isStaticDemo) {
     throw new MusicBrainzError(
       'Nesta prévia o app não tem acesso à internet. A busca automática funciona no app publicado.',
@@ -50,9 +86,13 @@ async function mbGet<T>(path: string, params: Record<string, string>): Promise<T
 
   let lastError: unknown
   for (let attempt = 0; attempt < 4; attempt++) {
+    if (signal?.aborted) throw abortError()
     if (attempt > 0) await sleep(1500 * 2 ** (attempt - 1))
     try {
-      const res = await throttled(() => fetch(url.toString(), { headers: { Accept: 'application/json' } }))
+      const res = await scheduled(priority, () => {
+        if (signal?.aborted) return Promise.reject(abortError())
+        return fetch(url.toString(), { headers: { Accept: 'application/json' }, signal })
+      })
       if (res.status === 503 || res.status === 429) {
         lastError = new MusicBrainzError('O MusicBrainz está ocupado. Tente de novo em instantes.', 'busy')
         continue
@@ -60,7 +100,8 @@ async function mbGet<T>(path: string, params: Record<string, string>): Promise<T
       if (!res.ok) throw new MusicBrainzError(`Erro ${res.status} ao consultar o MusicBrainz.`, 'http')
       return (await res.json()) as T
     } catch (err) {
-      if (err instanceof MusicBrainzError && err.kind === 'http') throw err
+      if (err instanceof MusicBrainzError && (err.kind === 'http' || err.kind === 'aborted')) throw err
+      if (signal?.aborted || (err instanceof DOMException && err.name === 'AbortError')) throw abortError()
       lastError =
         err instanceof MusicBrainzError
           ? err
@@ -95,10 +136,10 @@ interface MBArtistSearchResponse {
   }[]
 }
 
-export async function searchArtists(query: string, limit = 8): Promise<MBArtist[]> {
+export async function searchArtists(query: string, signal?: AbortSignal, limit = 8): Promise<MBArtist[]> {
   const q = query.trim()
   if (!q) return []
-  const data = await mbGet<MBArtistSearchResponse>('artist', { query: q, limit: String(limit) })
+  const data = await mbGet<MBArtistSearchResponse>('artist', { query: q, limit: String(limit) }, { priority: 'high', signal })
   return data.artists.map((a) => {
     const begin = a['life-span']?.begin?.slice(0, 4)
     const end = a['life-span']?.end?.slice(0, 4)
@@ -222,8 +263,12 @@ export interface MBTracksResult {
  * Escolhe a edição mais representativa do lançamento (oficial, de preferência
  * em vinil e do país do artista, a mais antiga) e devolve as faixas dela.
  */
-export async function fetchTracks(releaseGroupMbid: string, preferCountry?: string): Promise<MBTracksResult | null> {
-  const rg = await mbGet<MBReleaseGroupDetail>(`release-group/${releaseGroupMbid}`, { inc: 'releases+media' })
+export async function fetchTracks(
+  releaseGroupMbid: string,
+  preferCountry?: string,
+  priority: Priority = 'high',
+): Promise<MBTracksResult | null> {
+  const rg = await mbGet<MBReleaseGroupDetail>(`release-group/${releaseGroupMbid}`, { inc: 'releases+media' }, { priority })
   const official = rg.releases.filter((r) => r.status === 'Official')
   const pool = official.length ? official : rg.releases
   if (!pool.length) return null
@@ -232,7 +277,7 @@ export async function fetchTracks(releaseGroupMbid: string, preferCountry?: stri
     (isVinyl(r) ? 0 : 10) + (preferCountry && r.country === preferCountry ? 0 : 1) + (r.media?.length ? 0 : 5)
   const best = [...pool].sort((a, b) => score(a) - score(b) || (a.date ?? '9999').localeCompare(b.date ?? '9999'))[0]
 
-  const rel = await mbGet<MBReleaseDetail>(`release/${best.id}`, { inc: 'recordings+labels' })
+  const rel = await mbGet<MBReleaseDetail>(`release/${best.id}`, { inc: 'recordings+labels' }, { priority })
   const multi = rel.media.length > 1
   const tracks: Track[] = []
   for (const m of rel.media) {

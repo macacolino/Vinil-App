@@ -105,8 +105,13 @@ forma simples quando fizer sentido.
 - `src/components/` — Layout (cabeçalho + barra inferior), Cover, Rarity,
   AlbumCard, formulários (ArtistForm, AlbumForm, CopyForm).
 - `src/lib/` — formatação de moeda/data, parser de faixas, backup JSON,
-  `musicbrainz.ts` (cliente com fila de 1 req/s e tentativas em 503) e
-  `importArtist.ts` (cria artista + álbuns, carrega faixas).
+  `musicbrainz.ts` (cliente com fila de 1 req/s, prioridade alta para o que
+  o usuário espera e baixa para segundo plano, cancelamento por AbortSignal,
+  tentativas em 503), `importArtist.ts` (cria artista + álbuns, carrega
+  faixas) e `jobs.ts` (fila global de tarefas em segundo plano, fora do
+  React; a busca de faixas de um artista continua ao trocar de tela e é
+  retomada ao abrir o app). `components/JobsBar.tsx` mostra o progresso
+  acima do menu, em qualquer tela.
 - `src/components/ArtistSearch.tsx` — caixa "Novo artista" com busca e
   importação; `SortFilter.tsx` — ordenação e filtro por raridade.
 - `vite.config.ts` — plugin PWA; capas externas ficam em cache

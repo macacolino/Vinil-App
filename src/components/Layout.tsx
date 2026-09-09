@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react'
 import { NavLink, Outlet } from 'react-router-dom'
+import { useJobs } from '../lib/jobs'
+import { JobsBar } from './JobsBar'
 
 function useOnline() {
   const [online, setOnline] = useState(navigator.onLine)
@@ -18,6 +20,7 @@ function useOnline() {
 
 export function Layout() {
   const online = useOnline()
+  const jobs = useJobs()
   return (
     <>
       <header className="app-header">
@@ -27,9 +30,10 @@ export function Layout() {
         </NavLink>
         <span className={`status${online ? '' : ' offline'}`}>{online ? '' : 'offline'}</span>
       </header>
-      <main className="app-main">
+      <main className="app-main" style={jobs.length ? { paddingBottom: `calc(var(--nav-h) + 24px + ${jobs.length * 56}px)` } : undefined}>
         <Outlet />
       </main>
+      <JobsBar />
       <nav className="app-nav">
         <NavLink to="/" end className={({ isActive }) => (isActive ? 'active' : '')}>
           <span className="icon">🎸</span>

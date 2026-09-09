@@ -1,5 +1,5 @@
 import { useLiveQuery } from 'dexie-react-hooks'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { AlbumCard } from '../components/AlbumCard'
 import { AlbumForm, type AlbumFormData } from '../components/AlbumForm'
@@ -7,7 +7,8 @@ import { ArtistForm } from '../components/ArtistForm'
 import { SortFilter, sortAlbums, type SortKey } from '../components/SortFilter'
 import { db } from '../db/db'
 import { ALBUM_TYPES, ALBUM_TYPE_LABEL, type Album, type AlbumStatus } from '../db/types'
-import { loadAlbumTracks, needsTracks } from '../lib/importArtist'
+import { needsTracks } from '../lib/importArtist'
+import { activeJobFor, cancelJob, enqueueTracks, useJobs } from '../lib/jobs'
 
 type StatusFilter = 'all' | AlbumStatus
 
@@ -26,13 +27,11 @@ export function ArtistPage() {
   const [filter, setFilter] = useState<StatusFilter>('all')
   const [sort, setSort] = useState<SortKey>('year')
   const [minRarity, setMinRarity] = useState(0)
-  const [tracksProgress, setTracksProgress] = useState<{ done: number; total: number; error?: string } | null>(null)
-  const cancelTracks = useRef(false)
+  const jobs = useJobs()
+  const job = activeJobFor(jobs, artistId)
 
   const artist = useLiveQuery(() => db.artists.get(artistId), [artistId])
   const albums = useLiveQuery(() => db.albums.where('artistId').equals(artistId).toArray(), [artistId])
-
-  useEffect(() => () => void (cancelTracks.current = true), [])
 
   const grouped = useMemo(() => {
     if (!albums) return []
@@ -86,26 +85,6 @@ export function ArtistPage() {
     navigate('/')
   }
 
-  /** Busca as faixas de todos os álbuns importados que ainda não têm, um por vez. */
-  async function fetchAllTracks() {
-    const pending = albums!.filter(needsTracks)
-    cancelTracks.current = false
-    setTracksProgress({ done: 0, total: pending.length })
-    let done = 0
-    for (const album of pending) {
-      if (cancelTracks.current) return
-      try {
-        await loadAlbumTracks(album, artist!.countryCode)
-      } catch (err) {
-        setTracksProgress({ done, total: pending.length, error: err instanceof Error ? err.message : String(err) })
-        return
-      }
-      done += 1
-      setTracksProgress({ done, total: pending.length })
-    }
-    setTracksProgress(null)
-  }
-
   const filters: { key: StatusFilter; label: string }[] = [
     { key: 'all', label: `Todos (${albums.length})` },
     { key: 'have', label: `Tenho (${have})` },
@@ -122,7 +101,7 @@ export function ArtistPage() {
           {importState.alreadyExisted
             ? `${artist.name} já estava cadastrado. ${importState.imported} álbum(ns) novo(s) adicionado(s).`
             : `${importState.imported} álbuns importados do MusicBrainz.`}{' '}
-          As faixas são carregadas quando você abre cada álbum, ou todas de uma vez pelo botão abaixo.
+          As faixas estão sendo buscadas em segundo plano; você já pode usar o app.
         </div>
       )}
 
@@ -165,36 +144,33 @@ export function ArtistPage() {
         </div>
       )}
 
-      {pendingTracks > 0 && mode === 'view' && (
+      {(pendingTracks > 0 || job) && mode === 'view' && (
         <div className="card" style={{ marginBottom: 12 }}>
-          {tracksProgress ? (
+          {job ? (
             <>
               <div className="progress-line" style={{ marginTop: 0 }}>
-                {!tracksProgress.error && <span className="spinner" />}
-                {tracksProgress.error
-                  ? `Parou em ${tracksProgress.done} de ${tracksProgress.total}: ${tracksProgress.error}`
-                  : `Buscando faixas… ${tracksProgress.done} de ${tracksProgress.total}`}
+                <span className="spinner" />
+                {job.status === 'queued'
+                  ? 'Na fila para buscar faixas…'
+                  : `Buscando faixas em segundo plano… ${job.done} de ${job.total || pendingTracks}`}
               </div>
               <div className="progress">
-                <div style={{ width: `${(tracksProgress.done / Math.max(1, tracksProgress.total)) * 100}%` }} />
+                <div style={{ width: `${(job.done / Math.max(1, job.total)) * 100}%` }} />
               </div>
+              <p className="muted" style={{ marginTop: 8, fontSize: '0.8rem' }}>
+                Pode continuar usando o app; a busca segue mesmo trocando de tela.
+              </p>
               <div className="btn-row">
-                {tracksProgress.error ? (
-                  <button className="btn small" onClick={fetchAllTracks}>Tentar de novo</button>
-                ) : (
-                  <button className="btn ghost small" onClick={() => { cancelTracks.current = true; setTracksProgress(null) }}>
-                    Parar
-                  </button>
-                )}
+                <button className="btn ghost small" onClick={() => cancelJob(job.id)}>Parar</button>
               </div>
             </>
           ) : (
             <div className="page-title" style={{ marginBottom: 0 }}>
               <p className="muted">
-                {pendingTracks} álbum(ns) ainda sem faixas. Leva cerca de {Math.ceil((pendingTracks * 2.5) / 60)} min.
+                {pendingTracks} álbum(ns) ainda sem faixas. Leva cerca de {Math.ceil((pendingTracks * 2.5) / 60)} min, em segundo plano.
               </p>
               <span className="spacer" />
-              <button className="btn small" onClick={fetchAllTracks}>
+              <button className="btn small" onClick={() => enqueueTracks(artistId, artist.name)}>
                 Buscar faixas de todos
               </button>
             </div>
