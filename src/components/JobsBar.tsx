@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom'
-import { cancelJob, dismissJob, enqueueImport, enqueueTracks, useJobs, type Job } from '../lib/jobs'
+import { cancelJob, dismissJob, enqueueImport, enqueuePrices, enqueueTracks, useJobs, type Job } from '../lib/jobs'
 
 function text(job: Job) {
   const name = <Link to={`/artistas/${job.artistId}`}>{job.label}</Link>
@@ -23,6 +23,20 @@ function text(job: Job) {
         return <>Falha ao importar {name}: {job.error}</>
     }
   }
+  if (job.kind === 'prices') {
+    switch (job.status) {
+      case 'queued':
+        return <>Na fila: preços de {name}</>
+      case 'running':
+        return <>Consultando preços no Discogs para {name}{job.total ? ` · ${job.done} de ${job.total}` : '…'}</>
+      case 'done':
+        return <>Preços e raridade de {job.label} atualizados ({job.total}).</>
+      case 'cancelled':
+        return <>Consulta de preços de {name} parada em {job.done} de {job.total}.</>
+      case 'error':
+        return <>Falha nos preços de {name}: {job.error}</>
+    }
+  }
   switch (job.status) {
     case 'queued':
       return <>Na fila: faixas de {name}</>
@@ -40,6 +54,7 @@ function text(job: Job) {
 function retry(job: Job) {
   dismissJob(job.id)
   if (job.kind === 'import') enqueueImport(job.artistId, job.label, job.prune)
+  else if (job.kind === 'prices') enqueuePrices(job.artistId, job.label)
   else enqueueTracks(job.artistId, job.label)
 }
 
@@ -56,7 +71,7 @@ export function JobsBar() {
             {active && <span className="spinner" />}
             <div className="grow">
               <div className="job-text">{text(job)}</div>
-              {job.kind === 'tracks' && job.status === 'running' && job.total > 0 && (
+              {job.kind !== 'import' && job.status === 'running' && job.total > 0 && (
                 <div className="progress">
                   <div style={{ width: `${(job.done / job.total) * 100}%` }} />
                 </div>

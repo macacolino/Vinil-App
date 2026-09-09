@@ -89,8 +89,15 @@ forma simples quando fizer sentido.
   ficou com a URL do site por engano; por isso `cloud.ts` deduz o endereço a
   partir do `ref` contido na chave anon quando a variável não parece uma URL
   do Supabase. Só a chave anon é realmente necessária.
-- **Fase 3**: preço estimado e raridade automáticos (Discogs marketplace
-  stats), refinamentos da importação (filtrar só edições em vinil).
+- **Fase 3 (concluída)**: preço estimado e raridade automáticos via Discogs,
+  sem chave: MusicBrainz (`inc=url-rels`) dá o "master" do Discogs (ou busca
+  por artista+título), `masters/{id}/versions?format=Vinyl` lista as edições
+  em vinil e a mais colecionada vira referência; `marketplace/stats/{release}
+  ?curr_abbr=USD` dá menor anúncio e quantidade à venda. Raridade =
+  heurística em `lib/pricing.ts` (coleções no Discogs, à venda, preço).
+  Valores editados à mão (`priceSource`/`raritySource` = manual) não são
+  sobrescritos. Reconsulta a cada 30 dias. Limite do Discogs: 25/min, fila em
+  `lib/discogs.ts`. Tarefa `prices` em `jobs.ts`, encadeada após as faixas.
 - **Fase 4 (concluída)**: deploy automático no GitHub Pages; instalar no
   celular = abrir a URL no Chrome/Safari e "Adicionar à tela de início".
 
@@ -156,8 +163,13 @@ forma simples quando fizer sentido.
   RLS por usuário.
 - Build de teste com `VITE_TEST_HOOKS=1` expõe `window.__vinil`
   (`setCloudProvider`, `syncNow`, `db`) para o Playwright.
-- `vite.config.ts` — plugin PWA; capas externas ficam em cache
-  (CacheFirst) para funcionar offline.
+- `src/lib/discogs.ts` (fila de 25/min, 429 com Retry-After) e
+  `src/lib/pricing.ts` (resolução master → edição em vinil → preço/raridade).
+- `vite.config.ts` — plugin PWA; capas externas ficam em cache (CacheFirst)
+  para funcionar offline. ATENÇÃO: o cache é restrito a
+  `request.destination === 'image'`; nunca incluir domínios de API na regra,
+  senão o service worker congela as respostas (foi um bug real com
+  `discogs.com`).
 - Não há testes no repositório; validar com `npm run typecheck` e
   `npm run build`, e testar o fluxo no navegador com `npm run dev`.
 

@@ -10,7 +10,8 @@ import { deleteArtistWithAlbums, uniqueUid } from '../db/ops'
 import { albumUid } from '../db/uid'
 import { ALBUM_TYPES, ALBUM_TYPE_LABEL, type Album, type AlbumStatus } from '../db/types'
 import { needsTracks } from '../lib/importArtist'
-import { activeJobFor, cancelJob, enqueueImport, enqueueTracks, useJobs } from '../lib/jobs'
+import { activeJobFor, cancelJob, enqueueImport, enqueuePrices, enqueueTracks, useJobs } from '../lib/jobs'
+import { needsPricing } from '../lib/pricing'
 
 type StatusFilter = 'all' | AlbumStatus
 
@@ -31,6 +32,7 @@ export function ArtistPage() {
   const jobs = useJobs()
   const importJob = activeJobFor(jobs, artistId, 'import')
   const job = activeJobFor(jobs, artistId, 'tracks')
+  const pricesJob = activeJobFor(jobs, artistId, 'prices')
   const lastImport = jobs.find((j) => j.artistId === artistId && j.kind === 'import' && j.status === 'done')
 
   const artist = useLiveQuery(() => db.artists.get(artistId), [artistId])
@@ -62,6 +64,7 @@ export function ArtistPage() {
   const have = albums.filter((a) => a.status === 'have').length
   const want = albums.filter((a) => a.status === 'want').length
   const pendingTracks = albums.filter(needsTracks).length
+  const pendingPrices = albums.filter(needsPricing).length
 
   async function saveArtist(data: { name: string; country?: string; notes?: string }) {
     await db.artists.update(artistId, { ...data, updatedAt: Date.now() })
@@ -191,6 +194,37 @@ export function ArtistPage() {
               <span className="spacer" />
               <button className="btn small" onClick={() => enqueueTracks(artistId, artist.name)}>
                 Buscar faixas de todos
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
+      {pendingTracks === 0 && !job && (pendingPrices > 0 || pricesJob) && mode === 'view' && (
+        <div className="card" style={{ marginBottom: 12 }}>
+          {pricesJob ? (
+            <>
+              <div className="progress-line" style={{ marginTop: 0 }}>
+                <span className="spinner" />
+                {pricesJob.status === 'queued'
+                  ? 'Na fila para consultar preços…'
+                  : `Consultando preços e raridade no Discogs… ${pricesJob.done} de ${pricesJob.total || pendingPrices}`}
+              </div>
+              <div className="progress">
+                <div style={{ width: `${(pricesJob.done / Math.max(1, pricesJob.total)) * 100}%` }} />
+              </div>
+              <div className="btn-row">
+                <button className="btn ghost small" onClick={() => cancelJob(pricesJob.id)}>Parar</button>
+              </div>
+            </>
+          ) : (
+            <div className="page-title" style={{ marginBottom: 0 }}>
+              <p className="muted">
+                {pendingPrices} álbum(ns) sem preço/raridade do Discogs. Leva cerca de {Math.ceil((pendingPrices * 8) / 60)} min, em segundo plano.
+              </p>
+              <span className="spacer" />
+              <button className="btn small" onClick={() => enqueuePrices(artistId, artist.name)}>
+                Consultar preços
               </button>
             </div>
           )}

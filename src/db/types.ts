@@ -56,6 +56,15 @@ export interface Album {
   discogsId?: number
   /** Quando as faixas foram consultadas no MusicBrainz (evita repetir a busca). */
   tracksCheckedAt?: number
+  /** Preço e raridade: "manual" = definido pelo usuário, não é sobrescrito. */
+  priceSource?: 'manual' | 'discogs'
+  raritySource?: 'manual' | 'discogs'
+  /** Dados do Discogs (fase 3). */
+  discogsMasterId?: number
+  discogsReleaseId?: number
+  discogsInCollection?: number
+  discogsForSale?: number
+  discogsCheckedAt?: number
   createdAt: number
   updatedAt: number
 }

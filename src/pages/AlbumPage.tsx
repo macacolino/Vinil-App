@@ -1,5 +1,5 @@
 import { useLiveQuery } from 'dexie-react-hooks'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { AlbumForm, type AlbumFormData } from '../components/AlbumForm'
 import { CopyForm, type CopyFormData } from '../components/CopyForm'
@@ -8,9 +8,12 @@ import { Rarity } from '../components/Rarity'
 import { db } from '../db/db'
 import { deleteAlbums, deleteCopyForAlbum } from '../db/ops'
 import { copyUid } from '../db/uid'
-import { ALBUM_TYPE_LABEL, GRADE_LABEL, type AlbumStatus } from '../db/types'
+import { ALBUM_TYPE_LABEL, GRADE_LABEL, type Album, type AlbumStatus } from '../db/types'
 import { formatBRL, formatDate, formatDuration, formatUSD, useUsdToBrl } from '../lib/format'
 import { loadAlbumTracks, needsTracks } from '../lib/importArtist'
+import { needsPricing, updateAlbumPricing } from '../lib/pricing'
+import { releaseUrl } from '../lib/discogs'
+import { RARITY_LABEL } from '../db/types'
 
 export function AlbumPage() {
   const { id } = useParams()
@@ -21,6 +24,9 @@ export function AlbumPage() {
   const [editingCopy, setEditingCopy] = useState(false)
   const [tracksState, setTracksState] = useState<'idle' | 'loading' | 'error' | 'empty'>('idle')
   const [tracksError, setTracksError] = useState<string | null>(null)
+  const [priceState, setPriceState] = useState<'idle' | 'loading' | 'error' | 'notfound'>('idle')
+  const [priceError, setPriceError] = useState<string | null>(null)
+  const autoPricedFor = useRef<number | null>(null)
 
   const album = useLiveQuery(() => db.albums.get(albumId), [albumId])
   const artist = useLiveQuery(() => (album ? db.artists.get(album.artistId) : undefined), [album?.artistId])
@@ -48,6 +54,29 @@ export function AlbumPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [shouldFetchTracks, album?.id])
 
+  async function fetchPricingNow(force = false) {
+    if (!album || !artist) return
+    setPriceState('loading')
+    setPriceError(null)
+    try {
+      const r = await updateAlbumPricing(force ? { ...album, discogsCheckedAt: undefined } : album, artist.name, 'high')
+      setPriceState(r.found ? 'idle' : 'notfound')
+    } catch (err) {
+      setPriceState('error')
+      setPriceError(err instanceof Error ? err.message : String(err))
+    }
+  }
+
+  // Preço/raridade do Discogs desatualizados (ou nunca consultados): atualiza ao abrir.
+  const shouldFetchPricing = !!album && !!artist && needsPricing(album) && navigator.onLine
+  useEffect(() => {
+    if (shouldFetchPricing && priceState === 'idle' && autoPricedFor.current !== album!.id) {
+      autoPricedFor.current = album!.id!
+      void fetchPricingNow()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [shouldFetchPricing, album?.id])
+
   if (album === undefined) return <p className="empty">Carregando…</p>
   if (album === null) return <p className="empty">Álbum não encontrado.</p>
 
@@ -63,7 +92,11 @@ export function AlbumPage() {
   }
 
   async function saveAlbum(data: AlbumFormData) {
-    await db.albums.update(albumId, { ...data, updatedAt: Date.now() })
+    // Se o usuário mudou preço ou raridade à mão, o Discogs não sobrescreve mais.
+    const patch: Partial<Album> = { ...data, updatedAt: Date.now() }
+    if (data.rarity !== album!.rarity) patch.raritySource = 'manual'
+    if ((data.estimatedPriceUsd ?? null) !== (album!.estimatedPriceUsd ?? null)) patch.priceSource = 'manual'
+    await db.albums.update(albumId, patch)
     setEditing(false)
   }
 
@@ -135,7 +168,11 @@ export function AlbumPage() {
               <dd>{album.label ?? '—'}</dd>
               <dt>Raridade</dt>
               <dd>
-                <Rarity value={album.rarity} />
+                <Rarity value={album.rarity} />{' '}
+                <span className="muted" style={{ fontSize: '0.8rem' }}>
+                  {RARITY_LABEL[album.rarity]}
+                  {album.raritySource === 'manual' ? ' · definida por você' : album.raritySource === 'discogs' ? ' · automática' : ' · estimativa inicial'}
+                </span>
               </dd>
               <dt>Preço estimado</dt>
               <dd>
@@ -145,6 +182,34 @@ export function AlbumPage() {
                   </>
                 ) : (
                   '—'
+                )}
+                {album.priceSource === 'manual' && <span className="muted" style={{ fontSize: '0.8rem' }}> · definido por você</span>}
+              </dd>
+              <dt>Discogs</dt>
+              <dd>
+                {priceState === 'loading' ? (
+                  <span className="muted">consultando…</span>
+                ) : album.discogsReleaseId ? (
+                  <>
+                    <a href={releaseUrl(album.discogsReleaseId)} target="_blank" rel="noreferrer" style={{ textDecoration: 'underline' }}>
+                      {album.discogsForSale ?? 0} à venda
+                    </a>
+                    <span className="muted">
+                      {album.discogsInCollection != null ? ` · ${album.discogsInCollection.toLocaleString('pt-BR')} coleções` : ''}
+                      {album.discogsCheckedAt ? ` · ${formatDate(new Date(album.discogsCheckedAt).toISOString().slice(0, 10))}` : ''}
+                    </span>
+                  </>
+                ) : priceState === 'error' ? (
+                  <span className="muted">{priceError}</span>
+                ) : priceState === 'notfound' || album.discogsCheckedAt ? (
+                  <span className="muted">não encontrado</span>
+                ) : (
+                  <span className="muted">—</span>
+                )}
+                {priceState !== 'loading' && (
+                  <button className="btn ghost small" style={{ marginLeft: 8 }} onClick={() => fetchPricingNow(true)}>
+                    Atualizar
+                  </button>
                 )}
               </dd>
               {album.notes && (

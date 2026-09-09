@@ -349,6 +349,22 @@ export async function fetchTracks(
   return { tracks, label, releaseMbid: best.id, format: rel.media[0]?.format }
 }
 
+// ---------- Ligação com o Discogs ----------
+
+interface MBUrlRelsResponse {
+  relations?: { type?: string; url?: { resource?: string } }[]
+}
+
+/** Id do "master" no Discogs ligado a este lançamento no MusicBrainz, se houver. */
+export async function fetchDiscogsMasterId(releaseGroupMbid: string, priority: Priority = 'high'): Promise<number | null> {
+  const data = await mbGet<MBUrlRelsResponse>(`release-group/${releaseGroupMbid}`, { inc: 'url-rels' }, { priority })
+  for (const rel of data.relations ?? []) {
+    const m = rel.url?.resource?.match(/discogs\.com\/master\/(\d+)/)
+    if (m) return Number(m[1])
+  }
+  return null
+}
+
 /** Nome do país em português para os códigos mais comuns. */
 export function countryName(code: string | undefined): string | undefined {
   if (!code) return undefined

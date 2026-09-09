@@ -39,12 +39,15 @@ export default defineConfig({
         navigateFallback: `${base}index.html`,
         runtimeCaching: [
           {
-            // Capas de álbuns (iTunes / Cover Art Archive): guarda em cache para uso offline
-            urlPattern: ({ url }) =>
-              /(^|\.)mzstatic\.com$/.test(url.hostname) ||
-              /(^|\.)coverartarchive\.org$/.test(url.hostname) ||
-              /(^|\.)archive\.org$/.test(url.hostname) ||
-              /(^|\.)discogs\.com$/.test(url.hostname),
+            // Capas de álbuns (iTunes / Cover Art Archive / Discogs): guarda em cache para
+            // uso offline. Só imagens: chamadas de API (api.discogs.com, musicbrainz.org)
+            // nunca podem cair aqui, senão ficariam congeladas no cache.
+            urlPattern: ({ request, url }) =>
+              request.destination === 'image' &&
+              (/(^|\.)mzstatic\.com$/.test(url.hostname) ||
+                /(^|\.)coverartarchive\.org$/.test(url.hostname) ||
+                /(^|\.)archive\.org$/.test(url.hostname) ||
+                /^i\.discogs\.com$/.test(url.hostname)),
             handler: 'CacheFirst',
             options: {
               cacheName: 'capas',
