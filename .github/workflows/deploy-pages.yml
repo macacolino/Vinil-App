@@ -1,5 +1,7 @@
 # Publica o app no GitHub Pages a cada push nas branches abaixo.
-# Endereço: https://macacolino.github.io/main/
+# Endereço: https://macacolino.github.io/<nome-do-repositório>/
+# O caminho base é calculado a partir do nome do repositório, então renomear
+# o repositório no GitHub não quebra nada: o próximo push publica no novo endereço.
 name: Publicar no GitHub Pages
 
 on:
@@ -31,7 +33,7 @@ jobs:
       - run: npm ci
       - run: npm run build
         env:
-          VITE_BASE: /main/
+          VITE_BASE: /${{ github.event.repository.name }}/
       # Pages devolve 404.html para caminhos desconhecidos; com uma cópia do
       # index.html, abrir /main/albuns/5 direto no navegador continua funcionando.
       - run: cp dist/index.html dist/404.html

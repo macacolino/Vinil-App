@@ -23,12 +23,14 @@ forma simples quando fizer sentido.
   aceita chamadas do navegador (CORS) e já classifica estúdio / ao vivo /
   coletânea / EP. O Discogs fica para a fase 3 como fonte de preço estimado
   e raridade (estatísticas de mercado), não de discografia.
-- **Hospedagem (fase 4)**: GitHub Pages, em https://macacolino.github.io/main/
-  (workflow `.github/workflows/deploy-pages.yml`). Publica a cada push na
-  `main` e, enquanto durar o desenvolvimento, também na branch de trabalho.
-  O repositório precisa ser público (Pages gratuito). O build usa
-  `VITE_BASE=/main/` porque o app fica num subcaminho; `404.html` é uma cópia
-  do `index.html` para links diretos funcionarem.
+- **Hospedagem (fase 4)**: GitHub Pages, em
+  https://macacolino.github.io/<nome-do-repositório>/ (o repositório se
+  chamava `main`; o usuário pediu para renomear para `vinil-app`). Workflow
+  `.github/workflows/deploy-pages.yml`: publica a cada push na `main` e,
+  enquanto durar o desenvolvimento, também na branch de trabalho. O
+  repositório é público (exigência do Pages gratuito). O build usa
+  `VITE_BASE=/<nome-do-repositório>/`, calculado no workflow; `404.html` é
+  uma cópia do `index.html` para links diretos funcionarem.
 - **Moedas**: preço estimado do disco mostrado em USD e convertido para BRL
   (cotação ajustável em Configurações). Valor pago pelo usuário sempre em BRL.
 - **Local de compra**: apenas cidade e país.
