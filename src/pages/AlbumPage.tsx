@@ -4,7 +4,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom'
 import { AlbumForm, type AlbumFormData } from '../components/AlbumForm'
 import { CopyForm, type CopyFormData } from '../components/CopyForm'
 import { DiscogsMasterPicker } from '../components/DiscogsMasterPicker'
-import { Cover, pageSources } from '../components/Cover'
+import { Cover, largeCover, pageSources } from '../components/Cover'
 import { Rarity } from '../components/Rarity'
 import { db } from '../db/db'
 import { deleteAlbums, deleteCopyForAlbum } from '../db/ops'
@@ -138,7 +138,7 @@ export function AlbumPage() {
         </div>
       ) : (
         <>
-          <Cover sources={pageSources(album)} alt={album.title} size="large" />
+          <Cover sources={pageSources(album)} upgrade={largeCover(album.coverUrl)} alt={album.title} size="large" />
           <div className="page-title" style={{ marginTop: 16 }}>
             <div>
               <h1>{album.title}</h1>

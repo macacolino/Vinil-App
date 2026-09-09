@@ -117,7 +117,12 @@ forma simples quando fizer sentido.
   de preços) e por fim a miniatura (`discogsThumb`, 150 px). O archive.org
   oscila (500/reset), por isso a reserva e a segunda tentativa após 2 s.
   `i.discogs.com` NÃO envia CORS: `Cover` só usa `crossOrigin` nos hosts que
-  respondem CORS.
+  respondem CORS. `Cover` esconde a `<img>` até o `onLoad`; o estado é
+  reiniciado durante a renderização (padrão "prevKey"), NUNCA num
+  `useEffect`, porque uma imagem já em cache dispara `onLoad` antes do efeito
+  e ficaria invisível para sempre (foi um bug real: fotos de artista sumiam
+  ao voltar). A página do álbum mostra primeiro a mesma URL do card (já em
+  cache) e troca pela 1200 px via `upgrade` quando ela termina de carregar.
   Valores editados à mão (`priceSource`/`raritySource` = manual) não são
   sobrescritos. Reconsulta a cada 30 dias. Limite do Discogs: 25/min, fila em
   `lib/discogs.ts`. Tarefa `prices` em `jobs.ts`, encadeada após as faixas.
