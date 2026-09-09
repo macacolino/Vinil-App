@@ -1,6 +1,6 @@
 # Vinil — coleção de LPs
 
-App pessoal para catalogar a coleção de LPs de Allan (allandavid18@gmail.com) e
+App pessoal para catalogar a coleção de LPs de Allan e
 comparar o que ele tem com a discografia completa de cada artista. Responder
 sempre em português do Brasil. O usuário é iniciante em Git, GitHub e Claude
 Code: explicar cada passo do fluxo (branch, commit, push, pull request) de
@@ -23,7 +23,12 @@ forma simples quando fizer sentido.
   aceita chamadas do navegador (CORS) e já classifica estúdio / ao vivo /
   coletânea / EP. O Discogs fica para a fase 3 como fonte de preço estimado
   e raridade (estatísticas de mercado), não de discografia.
-- **Hospedagem (fase 4)**: Vercel ou Netlify, deploy automático da branch main.
+- **Hospedagem (fase 4)**: GitHub Pages, em https://macacolino.github.io/main/
+  (workflow `.github/workflows/deploy-pages.yml`). Publica a cada push na
+  `main` e, enquanto durar o desenvolvimento, também na branch de trabalho.
+  O repositório precisa ser público (Pages gratuito). O build usa
+  `VITE_BASE=/main/` porque o app fica num subcaminho; `404.html` é uma cópia
+  do `index.html` para links diretos funcionarem.
 - **Moedas**: preço estimado do disco mostrado em USD e convertido para BRL
   (cotação ajustável em Configurações). Valor pago pelo usuário sempre em BRL.
 - **Local de compra**: apenas cidade e país.
@@ -45,10 +50,10 @@ forma simples quando fizer sentido.
    discografia inteira é importada; faixas e gravadora são buscadas quando o
    álbum é aberto ou pelo botão "Buscar faixas de todos". Também dá para
    cadastrar artista e álbum à mão.
-7. **Raridade**: escala 1 a 5 em estrelas nos cards e na biblioteca, com
+6. **Raridade**: escala 1 a 5 em estrelas nos cards e na biblioteca, com
    ordenação e filtro. Os valores do Iron Maiden são estimativas iniciais
    feitas à mão; álbuns importados começam com 2 até o usuário ajustar.
-6. **Backup**: exportar/importar JSON nas Configurações.
+7. **Backup**: exportar/importar JSON nas Configurações.
 
 ## Fases
 
@@ -58,7 +63,8 @@ forma simples quando fizer sentido.
 - **Fase 2**: login e sincronização com Supabase.
 - **Fase 3**: preço estimado e raridade automáticos (Discogs marketplace
   stats), refinamentos da importação (filtrar só edições em vinil).
-- **Fase 4**: deploy automático e instalação no celular.
+- **Fase 4 (em andamento)**: deploy automático no GitHub Pages e instalação
+  no celular (PWA).
 
 ## Estado atual
 
@@ -84,7 +90,7 @@ forma simples quando fizer sentido.
 ## Estrutura do código
 
 - `src/db/types.ts` — tipos (Artist, Album, Copy, Setting) e rótulos em PT-BR.
-- `src/db/db.ts` — banco Dexie (`vinil`, versão 1) e chaves de settings.
+- `src/db/db.ts` — banco Dexie (`vinil`, versão 2) e chaves de settings.
 - `src/seed/ironMaiden.ts` — 36 LPs do Iron Maiden (gerado por script a
   partir do iTunes Search + Cover Art Archive; raridade e preço são
   estimativas iniciais). `src/seed/seed.ts` popula no primeiro uso e tem o

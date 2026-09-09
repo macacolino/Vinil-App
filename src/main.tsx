@@ -16,12 +16,15 @@ if (!isStaticDemo) {
   registerSW({ immediate: true })
 }
 
-const Router = isStaticDemo ? HashRouter : BrowserRouter
-
-createRoot(document.getElementById('root')!).render(
-  <StrictMode>
-    <Router>
-      <App />
-    </Router>
-  </StrictMode>,
+// BASE_URL vem do "base" do vite.config.ts (ex.: "/main/" no GitHub Pages).
+const router = isStaticDemo ? (
+  <HashRouter>
+    <App />
+  </HashRouter>
+) : (
+  <BrowserRouter basename={import.meta.env.BASE_URL}>
+    <App />
+  </BrowserRouter>
 )
+
+createRoot(document.getElementById('root')!).render(<StrictMode>{router}</StrictMode>)

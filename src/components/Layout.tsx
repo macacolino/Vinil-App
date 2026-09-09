@@ -22,7 +22,7 @@ export function Layout() {
     <>
       <header className="app-header">
         <NavLink to="/" className="brand">
-          <img src="/favicon.svg" alt="" />
+          <img src={`${import.meta.env.BASE_URL}favicon.svg`} alt="" />
           Vinil
         </NavLink>
         <span className={`status${online ? '' : ' offline'}`}>{online ? '' : 'offline'}</span>
