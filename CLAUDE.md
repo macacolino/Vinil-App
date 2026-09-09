@@ -17,7 +17,10 @@ forma simples quando fizer sentido.
   ser SQL, mais fácil de entender e consultar; uso pessoal, conflitos de sync
   são raros. As chaves ficam em `.env` e nunca vão para o GitHub.
 - **Catálogo**: discografias importadas do **MusicBrainz** (busca do artista
-  + release groups oficiais), capas do Cover Art Archive. Motivo da troca em
+  + release groups oficiais **que tenham pelo menos uma edição em vinil**,
+  cruzando `release-group` e `release?query=format:*vinyl*`; sem esse filtro
+  o Metallica vinha com 571 lançamentos por causa dos shows vendidos em
+  download), capas do Cover Art Archive. Motivo da troca em
   relação ao Discogs: a busca do Discogs exige token de API, que ficaria
   exposto dentro de um app de navegador; o MusicBrainz não precisa de chave,
   aceita chamadas do navegador (CORS) e já classifica estúdio / ao vivo /
@@ -80,8 +83,9 @@ forma simples quando fizer sentido.
 - Importação pelo MusicBrainz pronta (adiantada da fase 3) e testada com
   respostas reais da API gravadas em disco (o Chromium de teste não tem
   internet, então as chamadas são simuladas com `page.route`).
-- Banco Dexie na versão 2 (índices `mbid` e `rarity`). Nunca alterar uma
-  versão já publicada: criar `this.version(3)` etc.
+- Banco Dexie na versão 3 (v2: índices `mbid` e `rarity`; v3: marca o Iron
+  Maiden como revisado). Nunca alterar uma versão já publicada: criar
+  `this.version(4)` etc.
 - A prévia publicada como Artifact (build com `VITE_STATIC_DEMO=1`) não tem
   acesso à internet: a busca de artistas mostra um aviso nela. Só funciona
   no app publicado de verdade (fase 4).
@@ -95,7 +99,7 @@ forma simples quando fizer sentido.
 ## Estrutura do código
 
 - `src/db/types.ts` — tipos (Artist, Album, Copy, Setting) e rótulos em PT-BR.
-- `src/db/db.ts` — banco Dexie (`vinil`, versão 2) e chaves de settings.
+- `src/db/db.ts` — banco Dexie (`vinil`, versão 3) e chaves de settings.
 - `src/seed/ironMaiden.ts` — 36 LPs do Iron Maiden (gerado por script a
   partir do iTunes Search + Cover Art Archive; raridade e preço são
   estimativas iniciais). `src/seed/seed.ts` popula no primeiro uso e tem o
@@ -108,9 +112,13 @@ forma simples quando fizer sentido.
   `musicbrainz.ts` (cliente com fila de 1 req/s, prioridade alta para o que
   o usuário espera e baixa para segundo plano, cancelamento por AbortSignal,
   tentativas em 503), `importArtist.ts` (cria artista + álbuns, carrega
-  faixas) e `jobs.ts` (fila global de tarefas em segundo plano, fora do
-  React; a busca de faixas de um artista continua ao trocar de tela e é
-  retomada ao abrir o app). `components/JobsBar.tsx` mostra o progresso
+  faixas, revisão com `prune`) e `jobs.ts` (fila global de tarefas em
+  segundo plano, fora do React: importar/revisar discografia e buscar
+  faixas; continua ao trocar de tela, é retomada ao abrir o app, e uma
+  importação interrompe a busca de faixas e a devolve à fila). Artistas
+  importados antes do filtro de vinil (sem `discographyReviewedAt`) são
+  revisados automaticamente na próxima abertura do app; o Iron Maiden
+  (lista curada) é marcado como revisado na versão 3 do banco. `components/JobsBar.tsx` mostra o progresso
   acima do menu, em qualquer tela.
 - `src/components/ArtistSearch.tsx` — caixa "Novo artista" com busca e
   importação; `SortFilter.tsx` — ordenação e filtro por raridade.

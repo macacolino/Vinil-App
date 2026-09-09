@@ -1,5 +1,6 @@
 import Dexie, { type EntityTable } from 'dexie'
 import type { Album, Artist, Copy, Setting } from './types'
+import { IRON_MAIDEN_MBID } from '../seed/ironMaiden'
 import { seedIronMaiden } from '../seed/seed'
 
 /**
@@ -25,6 +26,18 @@ export class VinilDB extends Dexie {
       artists: '++id, name, mbid',
       albums: '++id, artistId, status, year, title, rarity, mbid, [artistId+year]',
     })
+    // v3: marca o Iron Maiden (lista curada) como já revisado, para a revisão
+    // automática de discografias só rodar nos artistas importados.
+    this.version(3)
+      .stores({})
+      .upgrade((tx) =>
+        tx
+          .table('artists')
+          .toCollection()
+          .modify((a: Artist) => {
+            if (a.mbid === IRON_MAIDEN_MBID && !a.discographyReviewedAt) a.discographyReviewedAt = Date.now()
+          }),
+      )
     // Roda só na primeira vez que o banco é criado neste navegador.
     this.on('populate', () => seedIronMaiden(this))
   }

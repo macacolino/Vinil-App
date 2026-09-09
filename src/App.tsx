@@ -6,12 +6,12 @@ import { ArtistPage } from './pages/ArtistPage'
 import { ArtistsPage } from './pages/ArtistsPage'
 import { LibraryPage } from './pages/LibraryPage'
 import { SettingsPage } from './pages/SettingsPage'
-import { resumePendingTracks } from './lib/jobs'
+import { resumePendingJobs } from './lib/jobs'
 
 export default function App() {
-  // Se sobrou álbum importado sem faixas (app fechado no meio), retoma em segundo plano.
+  // Retoma importações e buscas de faixas interrompidas (app fechado no meio).
   useEffect(() => {
-    void resumePendingTracks()
+    void resumePendingJobs()
   }, [])
   return (
     <Routes>

@@ -200,13 +200,18 @@ function classify(primary: string | undefined, secondary: string[]): AlbumType |
 export async function fetchDiscography(
   artistMbid: string,
   onProgress?: (loaded: number, total: number) => void,
+  priority: Priority = 'high',
 ): Promise<MBReleaseGroup[]> {
   const query = `arid:${artistMbid} AND status:official AND primarytype:(album OR ep)`
   const out: MBReleaseGroup[] = []
   let offset = 0
   let total = Infinity
   while (offset < total) {
-    const page = await mbGet<MBReleaseGroupSearchResponse>('release-group', { query, limit: '100', offset: String(offset) })
+    const page = await mbGet<MBReleaseGroupSearchResponse>(
+      'release-group',
+      { query, limit: '100', offset: String(offset) },
+      { priority },
+    )
     total = page.count
     for (const rg of page['release-groups']) {
       const type = classify(rg['primary-type'], rg['secondary-types'] ?? [])
@@ -221,6 +226,59 @@ export async function fetchDiscography(
   }
   // Ordena por data; sem data vai para o fim.
   out.sort((a, b) => (a.firstReleaseDate ?? '9999').localeCompare(b.firstReleaseDate ?? '9999'))
+  return out
+}
+
+interface MBReleaseSearchResponse {
+  count: number
+  releases: {
+    id: string
+    date?: string
+    country?: string
+    'release-group': { id: string }
+    'label-info'?: { label?: { name?: string } }[]
+  }[]
+}
+
+export interface VinylInfo {
+  /** Data da edição em vinil mais antiga encontrada. */
+  earliestDate?: string
+  /** Gravadora dessa edição. */
+  label?: string
+}
+
+/**
+ * Quais lançamentos do artista saíram em vinil, segundo o MusicBrainz.
+ * Devolve um mapa: id do release group → info da edição em vinil mais antiga.
+ * É isso que separa a discografia "de verdade" dos shows vendidos só em
+ * download (o Metallica tem centenas).
+ */
+export async function fetchVinylReleaseGroups(
+  artistMbid: string,
+  onProgress?: (loaded: number, total: number) => void,
+  priority: Priority = 'high',
+): Promise<Map<string, VinylInfo>> {
+  const query = `arid:${artistMbid} AND status:official AND format:*vinyl* AND primarytype:(album OR ep)`
+  const out = new Map<string, VinylInfo>()
+  let offset = 0
+  let total = Infinity
+  while (offset < total) {
+    const page = await mbGet<MBReleaseSearchResponse>('release', { query, limit: '100', offset: String(offset) }, { priority })
+    total = page.count
+    for (const rel of page.releases) {
+      const rgid = rel['release-group']?.id
+      if (!rgid) continue
+      const date = rel.date || undefined
+      const label = rel['label-info']?.map((li) => li.label?.name).find(Boolean) ?? undefined
+      const cur = out.get(rgid)
+      if (!cur) out.set(rgid, { earliestDate: date, label })
+      else if (date && (!cur.earliestDate || date < cur.earliestDate)) out.set(rgid, { earliestDate: date, label: label ?? cur.label })
+      else if (!cur.label && label) cur.label = label
+    }
+    offset += page.releases.length
+    onProgress?.(Math.min(offset, total), total)
+    if (page.releases.length === 0) break
+  }
   return out
 }
 

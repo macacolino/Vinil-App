@@ -8,12 +8,11 @@ import { SortFilter, sortAlbums, type SortKey } from '../components/SortFilter'
 import { db } from '../db/db'
 import { ALBUM_TYPES, ALBUM_TYPE_LABEL, type Album, type AlbumStatus } from '../db/types'
 import { needsTracks } from '../lib/importArtist'
-import { activeJobFor, cancelJob, enqueueTracks, useJobs } from '../lib/jobs'
+import { activeJobFor, cancelJob, enqueueImport, enqueueTracks, useJobs } from '../lib/jobs'
 
 type StatusFilter = 'all' | AlbumStatus
 
 interface ImportState {
-  imported?: number
   alreadyExisted?: boolean
 }
 
@@ -28,7 +27,9 @@ export function ArtistPage() {
   const [sort, setSort] = useState<SortKey>('year')
   const [minRarity, setMinRarity] = useState(0)
   const jobs = useJobs()
-  const job = activeJobFor(jobs, artistId)
+  const importJob = activeJobFor(jobs, artistId, 'import')
+  const job = activeJobFor(jobs, artistId, 'tracks')
+  const lastImport = jobs.find((j) => j.artistId === artistId && j.kind === 'import' && j.status === 'done')
 
   const artist = useLiveQuery(() => db.artists.get(artistId), [artistId])
   const albums = useLiveQuery(() => db.albums.where('artistId').equals(artistId).toArray(), [artistId])
@@ -96,12 +97,16 @@ export function ArtistPage() {
     <>
       <Link to="/" className="back">‹ Artistas</Link>
 
-      {importState?.imported != null && (
+      {importState?.alreadyExisted && !importJob && !lastImport && (
+        <div className="notice">{artist.name} já estava cadastrado.</div>
+      )}
+      {lastImport?.result && (
         <div className="notice ok">
-          {importState.alreadyExisted
-            ? `${artist.name} já estava cadastrado. ${importState.imported} álbum(ns) novo(s) adicionado(s).`
-            : `${importState.imported} álbuns importados do MusicBrainz.`}{' '}
-          As faixas estão sendo buscadas em segundo plano; você já pode usar o app.
+          Discografia conferida no MusicBrainz: {lastImport.result.total} álbuns
+          {lastImport.result.added ? `, ${lastImport.result.added} novos` : ''}
+          {lastImport.result.removed ? `, ${lastImport.result.removed} removidos por não terem edição em vinil` : ''}.
+          {lastImport.result.usedFallback ? ' O MusicBrainz não tem dados de formato para este artista; a lista completa foi usada.' : ''}{' '}
+          As faixas vêm em segundo plano.
         </div>
       )}
 
@@ -110,6 +115,23 @@ export function ArtistPage() {
           <h2>Editar artista</h2>
           <ArtistForm initial={artist} onSave={saveArtist} onCancel={() => setMode('view')} />
           <hr className="hr" />
+          {artist.mbid && (
+            <div style={{ marginBottom: 12 }}>
+              <button
+                className="btn small"
+                disabled={!!importJob}
+                onClick={() => {
+                  enqueueImport(artistId, artist.name, true)
+                  setMode('view')
+                }}
+              >
+                Revisar discografia no MusicBrainz
+              </button>
+              <p className="muted" style={{ marginTop: 6, fontSize: '0.8rem' }}>
+                Refaz a lista mantendo só lançamentos oficiais com edição em vinil. Álbuns marcados como "tenho" ou "quero" nunca são removidos.
+              </p>
+            </div>
+          )}
           <button className="btn danger small" onClick={removeArtist}>
             Apagar artista e álbuns
           </button>
@@ -191,8 +213,20 @@ export function ArtistPage() {
         </>
       )}
 
+      {importJob && (
+        <div className="card" style={{ marginBottom: 12 }}>
+          <div className="progress-line" style={{ marginTop: 0 }}>
+            <span className="spinner" />
+            {importJob.status === 'queued' ? 'Na fila para importar a discografia…' : `Importando discografia… ${importJob.detail ?? ''}`}
+          </div>
+          <p className="muted" style={{ marginTop: 8, fontSize: '0.8rem' }}>
+            Pode continuar usando o app; os álbuns aparecem aqui quando terminar.
+          </p>
+        </div>
+      )}
+
       {albums.length === 0 ? (
-        <p className="empty">Nenhum álbum cadastrado. Toque em "+ Álbum".</p>
+        !importJob && <p className="empty">Nenhum álbum cadastrado. Toque em "+ Álbum".</p>
       ) : grouped.length === 0 ? (
         <p className="empty">Nada nesse filtro.</p>
       ) : (

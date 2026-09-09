@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { db } from '../db/db'
-import { importArtistFromMusicBrainz } from '../lib/importArtist'
-import { enqueueTracks } from '../lib/jobs'
+import { createArtistFromMusicBrainz } from '../lib/importArtist'
+import { enqueueImport } from '../lib/jobs'
 import { MusicBrainzError, countryName, searchArtists, type MBArtist } from '../lib/musicbrainz'
 import { ArtistForm } from './ArtistForm'
 
@@ -71,17 +71,12 @@ export function ArtistSearch({ onClose }: Props) {
 
   async function choose(mb: MBArtist) {
     setError(null)
-    setImporting(`Importando ${mb.name}…`)
+    setImporting(`Adicionando ${mb.name}…`)
     try {
-      const result = await importArtistFromMusicBrainz(mb, setImporting)
-      // Faixas e gravadoras vêm em segundo plano, sem travar o app.
-      enqueueTracks(result.artistId, mb.name)
-      navigate(`/artistas/${result.artistId}`, {
-        state: {
-          imported: result.added,
-          alreadyExisted: result.alreadyExisted,
-        },
-      })
+      const { artistId, alreadyExisted } = await createArtistFromMusicBrainz(mb)
+      // Discografia, faixas e gravadoras vêm em segundo plano, sem travar o app.
+      enqueueImport(artistId, mb.name)
+      navigate(`/artistas/${artistId}`, { state: { alreadyExisted } })
     } catch (err) {
       setImporting(null)
       setError(err instanceof Error ? err.message : String(err))

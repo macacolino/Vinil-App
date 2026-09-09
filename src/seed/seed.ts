@@ -21,6 +21,7 @@ export async function seedIronMaiden(db: VinilDB) {
     name: 'Iron Maiden',
     country: 'Reino Unido',
     mbid: IRON_MAIDEN_MBID,
+    discographyReviewedAt: now, // lista curada à mão; não passa pela revisão automática
     createdAt: now,
     updatedAt: now,
   })) as number
@@ -49,6 +50,7 @@ export async function restoreIronMaiden(db: VinilDB): Promise<number> {
         name: 'Iron Maiden',
         country: 'Reino Unido',
         mbid: IRON_MAIDEN_MBID,
+        discographyReviewedAt: now,
         createdAt: now,
         updatedAt: now,
       })

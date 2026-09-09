@@ -25,6 +25,8 @@ export interface Artist {
   /** Chaves em fontes externas (fase 3). */
   mbid?: string
   discogsId?: number
+  /** Quando a discografia foi conferida com o filtro "só edições em vinil". */
+  discographyReviewedAt?: number
   createdAt: number
   updatedAt: number
 }
