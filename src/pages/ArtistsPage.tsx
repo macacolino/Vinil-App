@@ -49,14 +49,15 @@ export function ArtistsPage() {
 
       {adding && <ArtistSearch onClose={() => setAdding(false)} />}
 
-      {rows && rows.length > 3 && (
+      {/* Conta os artistas totais, não os filtrados, senão a caixa some ao digitar. */}
+      {artists && artists.length > 3 && (
         <input className="search" placeholder="Filtrar meus artistas…" value={search} onChange={(e) => setSearch(e.target.value)} />
       )}
 
       {rows === undefined ? (
         <p className="empty">Carregando…</p>
       ) : rows.length === 0 ? (
-        <p className="empty">Nenhum artista ainda. Toque em "+ Artista" para começar.</p>
+        <p className="empty">{search ? 'Nenhum artista com esse nome.' : 'Nenhum artista ainda. Toque em "+ Artista" para começar.'}</p>
       ) : (
         <div className="list">
           {rows.map(({ artist, total, have, want }) => (
