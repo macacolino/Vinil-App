@@ -80,8 +80,40 @@ export interface Album {
   discogsCheckedAt?: number
   /** Versão da regra usada na última consulta (ver PRICING_ALGO). */
   discogsAlgo?: number
+  /** Edições (prensagens) deste álbum que o usuário escaneou ou anotou. */
+  editions?: AlbumEdition[]
   createdAt: number
   updatedAt: number
+}
+
+/**
+ * Uma edição específica do álbum (prensagem), identificada pelo código de
+ * barras ou número de catálogo. Fica dentro do álbum para sincronizar junto.
+ */
+export interface AlbumEdition {
+  /** Chave local: "dg-<release>" (Discogs), "mb-<release>" (MusicBrainz) ou "code-<código>". */
+  key: string
+  discogsReleaseId?: number
+  discogsMasterId?: number
+  mbReleaseId?: string
+  barcode?: string
+  catalogNumber?: string
+  year?: number
+  country?: string
+  label?: string
+  /** Descrição do formato, ex.: "LP, Album, Reissue, 180 gr". */
+  format?: string
+  thumb?: string
+  /** true = tenho esta edição; false = só vi (loja, feira, sebo…). */
+  owned: boolean
+  /** Menor anúncio (USD) e quantos à venda desta edição exata no Discogs. */
+  lowestUsd?: number
+  forSale?: number
+  inCollection?: number
+  priceCheckedAt?: number
+  /** Quando foi escaneada/anotada. */
+  seenAt: number
+  notes?: string
 }
 
 /** A cópia física que o usuário tem de um álbum (uma por álbum). */
@@ -93,6 +125,9 @@ export interface Copy {
   pressingYear?: number
   pressingCountry?: string
   pressingLabel?: string
+  /** Número de catálogo da edição (lombada/selo) e código de barras. */
+  catalogNumber?: string
+  barcode?: string
   mediaCondition?: Grade
   sleeveCondition?: Grade
   pricePaidBrl?: number

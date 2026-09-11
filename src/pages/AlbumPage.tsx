@@ -1,6 +1,6 @@
 import { useLiveQuery } from 'dexie-react-hooks'
 import { useEffect, useRef, useState } from 'react'
-import { Link, useNavigate, useParams } from 'react-router-dom'
+import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { AlbumForm, type AlbumFormData } from '../components/AlbumForm'
 import { CopyForm, type CopyFormData } from '../components/CopyForm'
 import { DiscogsMasterPicker } from '../components/DiscogsMasterPicker'
@@ -14,15 +14,18 @@ import { formatBRL, formatDate, formatDuration, formatUSD, useUsdToBrl } from '.
 import { loadAlbumTracks, needsTracks } from '../lib/importArtist'
 import { needsPricing, updateAlbumPricing } from '../lib/pricing'
 import { masterUrl, releaseUrl } from '../lib/discogs'
+import { removeEdition, setEditionOwned } from '../lib/barcode'
 import { RARITY_LABEL } from '../db/types'
 
 export function AlbumPage() {
   const { id } = useParams()
   const albumId = Number(id)
   const navigate = useNavigate()
+  const location = useLocation()
   const rate = useUsdToBrl()
   const [editing, setEditing] = useState(false)
-  const [editingCopy, setEditingCopy] = useState(false)
+  // Vindo do "Escanear" com "Completar minha cópia": já abre o formulário.
+  const [editingCopy, setEditingCopy] = useState(() => !!(location.state as { editCopy?: boolean } | null)?.editCopy)
   const [tracksState, setTracksState] = useState<'idle' | 'loading' | 'error' | 'empty'>('idle')
   const [tracksError, setTracksError] = useState<string | null>(null)
   const [priceState, setPriceState] = useState<'idle' | 'loading' | 'error' | 'notfound'>('idle')
@@ -286,13 +289,27 @@ export function AlbumPage() {
                 )}
               </div>
               {editingCopy ? (
-                <CopyForm initial={copy ?? undefined} onSave={saveCopy} onCancel={() => setEditingCopy(false)} />
+                // Espera a cópia carregar do banco: o formulário lê os valores iniciais só ao abrir.
+                copy === undefined ? (
+                  <p className="muted">Carregando…</p>
+                ) : (
+                  <CopyForm key={copy?.id ?? 'nova'} initial={copy ?? undefined} onSave={saveCopy} onCancel={() => setEditingCopy(false)} />
+                )
               ) : copy ? (
                 <dl className="kv">
                   <dt>Prensagem</dt>
                   <dd>
                     {[copy.pressingYear, copy.pressingCountry, copy.pressingLabel].filter(Boolean).join(' · ') || '—'}
                   </dd>
+                  {(copy.catalogNumber || copy.barcode) && (
+                    <>
+                      <dt>Catálogo</dt>
+                      <dd>
+                        {copy.catalogNumber ?? '—'}
+                        {copy.barcode && <span className="muted"> · código {copy.barcode}</span>}
+                      </dd>
+                    </>
+                  )}
                   <dt>Disco</dt>
                   <dd title={copy.mediaCondition ? GRADE_LABEL[copy.mediaCondition] : ''}>{copy.mediaCondition ?? '—'}</dd>
                   <dt>Capa</dt>
@@ -312,6 +329,73 @@ export function AlbumPage() {
               ) : (
                 <p className="muted">Ainda sem detalhes da sua cópia.</p>
               )}
+            </div>
+          )}
+
+          {(album.editions?.length ?? 0) > 0 && (
+            <div className="card">
+              <div className="page-title" style={{ marginBottom: 8 }}>
+                <h2 style={{ marginBottom: 0 }}>Edições que encontrei</h2>
+                <span className="spacer" />
+                <Link className="btn small" to="/escanear">
+                  📷 Escanear
+                </Link>
+              </div>
+              <ul className="editions">
+                {[...album.editions!]
+                  .sort((a, b) => Number(b.owned) - Number(a.owned) || b.seenAt - a.seenAt)
+                  .map((e) => (
+                    <li key={e.key}>
+                      <Cover sources={[e.thumb]} alt="" size="small" />
+                      <div className="grow">
+                        <div className="title">
+                          <span>{[e.year, e.country].filter(Boolean).join(' · ') || 'Edição'}</span>
+                          <span className={`badge${e.owned ? ' have' : ''}`}>{e.owned ? 'tenho' : 'vista'}</span>
+                        </div>
+                        <div className="meta">{[e.label, e.catalogNumber, e.format].filter(Boolean).join(' · ')}</div>
+                        <div className="meta">
+                          {e.lowestUsd != null ? (
+                            <>
+                              {formatUSD(e.lowestUsd)} ≈ {formatBRL(e.lowestUsd * rate)} · {e.forSale ?? 0} à venda
+                            </>
+                          ) : e.discogsReleaseId ? (
+                            'sem anúncios desta edição'
+                          ) : (
+                            ''
+                          )}
+                          {e.barcode && ` · código ${e.barcode}`}
+                          {e.discogsReleaseId && (
+                            <>
+                              {' · '}
+                              <a href={releaseUrl(e.discogsReleaseId)} target="_blank" rel="noreferrer" style={{ textDecoration: 'underline' }}>
+                                Discogs
+                              </a>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                      <div className="actions">
+                        {e.owned ? (
+                          <button className="btn ghost small" onClick={() => setEditionOwned(albumId, e.key, false)}>
+                            Não é minha
+                          </button>
+                        ) : (
+                          <button className="btn ok small" onClick={() => setEditionOwned(albumId, e.key, true)}>
+                            ✓ Tenho
+                          </button>
+                        )}
+                        <button
+                          className="btn ghost small"
+                          onClick={() => {
+                            if (window.confirm('Remover esta edição da lista?')) void removeEdition(albumId, e.key)
+                          }}
+                        >
+                          Remover
+                        </button>
+                      </div>
+                    </li>
+                  ))}
+              </ul>
             </div>
           )}
 

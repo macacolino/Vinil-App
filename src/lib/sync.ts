@@ -312,13 +312,23 @@ export async function syncNow(): Promise<void> {
 // Ganchos para os testes automatizados trocarem o Supabase por um provedor falso.
 declare global {
   interface Window {
-    __vinil?: { setCloudProvider: (p: CloudProvider | null) => void; syncNow: () => Promise<void>; db: typeof db; syncStatus: () => SyncStatus; pricing?: Record<string, unknown> }
+    __vinil?: {
+      setCloudProvider: (p: CloudProvider | null) => void
+      syncNow: () => Promise<void>
+      db: typeof db
+      syncStatus: () => SyncStatus
+      pricing?: Record<string, unknown>
+      barcode?: Record<string, unknown>
+      decodeImage?: (url: string) => Promise<string | null>
+    }
   }
 }
 if (import.meta.env.VITE_TEST_HOOKS === '1') {
-  Promise.all([import('./cloud'), import('./pricing')]).then(([{ setCloudProvider }, pricing]) => {
-    window.__vinil = { setCloudProvider, syncNow, db, syncStatus: () => status, pricing: { ...pricing } }
-  })
+  Promise.all([import('./cloud'), import('./pricing'), import('./barcode'), import('../components/BarcodeScanner')]).then(
+    ([{ setCloudProvider }, pricing, barcode, scanner]) => {
+      window.__vinil = { setCloudProvider, syncNow, db, syncStatus: () => status, pricing: { ...pricing }, barcode: { ...barcode }, decodeImage: scanner.decodeImage }
+    },
+  )
 }
 
 export type { Setting }

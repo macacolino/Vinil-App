@@ -56,6 +56,10 @@ export function Layout() {
           <span className="icon">📀</span>
           Biblioteca
         </NavLink>
+        <NavLink to="/escanear" className={({ isActive }) => (isActive ? 'active' : '')}>
+          <span className="icon">📷</span>
+          Escanear
+        </NavLink>
         <NavLink to="/configuracoes" className={({ isActive }) => (isActive ? 'active' : '')}>
           <span className="icon">⚙️</span>
           Configurações

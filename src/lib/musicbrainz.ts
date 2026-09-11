@@ -409,3 +409,72 @@ export function countryName(code: string | undefined): string | undefined {
   }
   return names[code] ?? code
 }
+
+// ---------- Busca de lançamentos por código de barras / catálogo ----------
+
+export interface MBReleaseHit {
+  releaseId: string
+  title: string
+  date?: string
+  country?: string
+  barcode?: string
+  releaseGroupId?: string
+  albumType: AlbumType
+  artistMbid?: string
+  artistName: string
+  label?: string
+  catno?: string
+  format?: string
+}
+
+interface MBCodeSearchResponse {
+  releases?: {
+    id: string
+    title: string
+    status?: string
+    date?: string
+    country?: string
+    barcode?: string
+    'release-group'?: { id: string; 'primary-type'?: string; 'secondary-types'?: string[] }
+    'artist-credit'?: { name?: string; artist?: { id: string; name: string } }[]
+    'label-info'?: { 'catalog-number'?: string; label?: { name?: string } }[]
+    media?: { format?: string }[]
+  }[]
+}
+
+/** Tipo do álbum a partir dos tipos do release group do MusicBrainz. */
+export function albumTypeFromMB(primary?: string, secondary: string[] = []): AlbumType {
+  if (secondary.includes('Live')) return 'live'
+  if (secondary.includes('Compilation')) return 'compilation'
+  if (primary === 'EP' || primary === 'Single') return 'ep'
+  return 'studio'
+}
+
+/** Lançamentos com este código de barras ou número de catálogo. */
+export async function searchReleasesByCode(code: string, kind: 'barcode' | 'catno', priority: Priority = 'high'): Promise<MBReleaseHit[]> {
+  // EAN-13 com zero à esquerda e UPC-A de 12 dígitos são o mesmo código; o
+  // MusicBrainz guarda ora um, ora outro, então pergunta pelos dois.
+  const variants = kind === 'barcode' ? [code, code.length === 13 && code.startsWith('0') ? code.slice(1) : code.length === 12 ? `0${code}` : ''].filter(Boolean) : []
+  const query = kind === 'barcode' ? variants.map((v) => `barcode:${v}`).join(' OR ') : `catno:"${code.replace(/"/g, '')}"`
+  const data = await mbGet<MBCodeSearchResponse>('release', { query, limit: '25' }, { priority })
+  return (data.releases ?? [])
+    .filter((r) => !r.status || r.status === 'Official')
+    .map((r) => {
+      const credit = r['artist-credit']?.[0]
+      const li = r['label-info']?.[0]
+      return {
+        releaseId: r.id,
+        title: r.title,
+        date: r.date,
+        country: r.country,
+        barcode: r.barcode,
+        releaseGroupId: r['release-group']?.id,
+        albumType: albumTypeFromMB(r['release-group']?.['primary-type'], r['release-group']?.['secondary-types']),
+        artistMbid: credit?.artist?.id,
+        artistName: credit?.artist?.name ?? credit?.name ?? '',
+        label: li?.label?.name,
+        catno: li?.['catalog-number'],
+        format: r.media?.map((m) => m.format).filter(Boolean).join(', ') || undefined,
+      }
+    })
+}

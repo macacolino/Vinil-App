@@ -261,3 +261,156 @@ export function masterUrl(masterId: number): string {
 export function releaseUrl(releaseId: number): string {
   return `https://www.discogs.com/release/${releaseId}`
 }
+
+// ---------- Busca por código de barras / número de catálogo ----------
+
+export interface ReleaseCandidate {
+  releaseId: number
+  masterId?: number
+  /** Só o nome do artista (o Discogs devolve "Artista - Título"). */
+  artistName: string
+  title: string
+  year?: number
+  country?: string
+  label?: string
+  catno?: string
+  /** Descrições de formato (ex.: ["Vinyl", "LP", "Album", "Reissue"]). */
+  formats: string[]
+  vinyl: boolean
+  barcodes: string[]
+  thumb?: string
+  coverImage?: string
+  have: number
+  want: number
+}
+
+interface SearchRelease {
+  id?: number
+  master_id?: number | null
+  title?: string
+  year?: string
+  country?: string
+  label?: string[]
+  catno?: string
+  format?: string[]
+  barcode?: string[]
+  thumb?: string
+  cover_image?: string
+  community?: { have?: number; want?: number }
+}
+
+/** Separa "Artista - Título" no primeiro " - ". */
+export function splitDiscogsTitle(full: string): { artistName: string; title: string } {
+  const i = full.indexOf(' - ')
+  if (i < 0) return { artistName: '', title: full.trim() }
+  return { artistName: full.slice(0, i).trim(), title: full.slice(i + 3).trim() }
+}
+
+/** Tira o sufixo de desambiguação do Discogs, ex.: "Nirvana (2)" → "Nirvana". */
+export function cleanArtistName(name: string): string {
+  return name.replace(/\s*\(\d+\)\s*$/, '').trim()
+}
+
+function toCandidate(r: SearchRelease): ReleaseCandidate | null {
+  if (!r.id || !r.title) return null
+  const { artistName, title } = splitDiscogsTitle(r.title)
+  const formats = r.format ?? []
+  return {
+    releaseId: r.id,
+    masterId: r.master_id || undefined,
+    artistName: cleanArtistName(artistName),
+    title,
+    year: r.year ? Number.parseInt(r.year, 10) || undefined : undefined,
+    country: r.country || undefined,
+    label: r.label?.[0] || undefined,
+    catno: r.catno && r.catno !== 'none' ? r.catno : undefined,
+    formats,
+    vinyl: formats.some((f) => /vinyl/i.test(f)),
+    barcodes: (r.barcode ?? []).map((b) => b.replace(/\D/g, '')).filter(Boolean),
+    thumb: r.thumb || undefined,
+    coverImage: r.cover_image || undefined,
+    have: r.community?.have ?? 0,
+    want: r.community?.want ?? 0,
+  }
+}
+
+/**
+ * Edições com este código de barras (ou número de catálogo). Vinil primeiro;
+ * se não houver vinil, devolve as outras (CD etc.) para o usuário saber do
+ * que se trata.
+ */
+export async function searchReleasesByCode(code: string, kind: 'barcode' | 'catno', priority: Priority = 'high'): Promise<ReleaseCandidate[]> {
+  const params: Record<string, string> = { type: 'release', per_page: '25' }
+  params[kind] = code
+  const vinyl = await dgGet<{ results?: SearchRelease[] }>('database/search', { ...params, format: 'Vinyl' }, priority)
+  let results = (vinyl.results ?? []).map(toCandidate).filter((c): c is ReleaseCandidate => !!c)
+  if (!results.length) {
+    const any = await dgGet<{ results?: SearchRelease[] }>('database/search', params, priority)
+    results = (any.results ?? []).map(toCandidate).filter((c): c is ReleaseCandidate => !!c)
+  }
+  const seen = new Set<number>()
+  return results
+    .filter((c) => (seen.has(c.releaseId) ? false : (seen.add(c.releaseId), true)))
+    .sort((a, b) => Number(b.vinyl) - Number(a.vinyl) || b.have - a.have)
+}
+
+export interface ReleaseDetails {
+  releaseId: number
+  masterId?: number
+  title: string
+  artists: { id: number; name: string }[]
+  year?: number
+  country?: string
+  label?: string
+  catno?: string
+  format?: string
+  vinyl: boolean
+  barcode?: string
+  coverUrl?: string
+  thumb?: string
+  tracks: { position: string; title: string; durationMs?: number }[]
+}
+
+/** Detalhes de uma edição: artista (com id), master, gravadora, catálogo, formato, capa e faixas. */
+export async function fetchReleaseDetails(releaseId: number, priority: Priority = 'high'): Promise<ReleaseDetails> {
+  const d = await dgGet<{
+    id: number
+    master_id?: number | null
+    title?: string
+    artists?: { id?: number; name?: string }[]
+    year?: number
+    country?: string
+    labels?: { name?: string; catno?: string }[]
+    formats?: { name?: string; descriptions?: string[]; text?: string }[]
+    identifiers?: { type?: string; value?: string }[]
+    images?: { type?: string; uri?: string; uri150?: string }[]
+    tracklist?: { position?: string; type_?: string; title?: string; duration?: string }[]
+  }>(`releases/${releaseId}`, {}, priority)
+  const primary = d.images?.find((i) => i.type === 'primary') ?? d.images?.[0]
+  const label = d.labels?.[0]
+  const fmt = d.formats?.[0]
+  const format = fmt ? [fmt.name, ...(fmt.descriptions ?? []), fmt.text].filter(Boolean).join(', ') : undefined
+  const barcode = d.identifiers?.find((i) => i.type === 'Barcode')?.value?.replace(/\D/g, '') || undefined
+  const tracks = (d.tracklist ?? [])
+    .filter((t) => (t.type_ ?? 'track') === 'track' && t.title)
+    .map((t, i) => {
+      const m = t.duration?.match(/^(\d+):(\d{2})$/)
+      return { position: t.position || String(i + 1), title: t.title!, durationMs: m ? (Number(m[1]) * 60 + Number(m[2])) * 1000 : undefined }
+    })
+  return {
+    releaseId: d.id,
+    masterId: d.master_id || undefined,
+    title: (d.title ?? '').trim(),
+    artists: (d.artists ?? []).filter((a) => a.id && a.name).map((a) => ({ id: a.id!, name: cleanArtistName(a.name!) })),
+    year: d.year || undefined,
+    country: d.country || undefined,
+    label: label?.name || undefined,
+    catno: label?.catno && label.catno !== 'none' ? label.catno : undefined,
+    format,
+    vinyl: (d.formats ?? []).some((f) => /vinyl/i.test(f.name ?? '')),
+    barcode,
+    coverUrl: primary?.uri,
+    thumb: primary?.uri150,
+    tracks,
+  }
+}

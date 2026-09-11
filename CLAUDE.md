@@ -81,6 +81,26 @@ forma simples quando fizer sentido.
    ordenação e filtro. Os valores do Iron Maiden são estimativas iniciais
    feitas à mão; álbuns importados começam com 2 até o usuário ajustar.
 7. **Backup**: exportar/importar JSON nas Configurações.
+8. **Escanear** (aba própria): lê o código de barras com a câmera (ou o
+   usuário digita o código / número de catálogo), mostra de que álbum é e
+   quais edições existem com aquele código (país, ano, gravadora, catálogo).
+   Ao escolher uma: cria o artista (via MusicBrainz, com a discografia
+   importada em segundo plano) e o álbum se ainda não existirem, guarda a
+   edição em `Album.editions` (`AlbumEdition`, com preço da edição exata via
+   `marketplace/stats`) marcada como "tenho" ou "vista", e no "tenho" marca
+   o álbum e preenche a cópia (ano/país/gravadora/catálogo/código). Só as
+   edições escaneadas são guardadas, nunca todas as versões do Discogs.
+   Decisões: edições ficam DENTRO do álbum (JSON) para sincronizar sem mudar
+   o esquema do Supabase nem a versão do Dexie. Busca: Discogs
+   `database/search?type=release&barcode=` (primeiro `format=Vinyl`, depois
+   sem filtro) em paralelo com MusicBrainz `release?query=barcode:A OR
+   barcode:B` (EAN-13 com zero à esquerda e UPC-A de 12 dígitos são o mesmo
+   código; o MB guarda ora um, ora outro). Leitor: `BarcodeDetector` nativo
+   quando existe (Chrome Android), senão `@zxing/browser` carregado sob
+   demanda (chunk separado de ~450 KB). Testado com câmera falsa do Chromium
+   (`--use-file-for-fake-video-capture` com um Y4M do EAN-13) e com
+   respostas reais gravadas em `scratchpad/bc`. Discos antes de ~1985 não têm
+   código de barras: usar o número de catálogo (`catno`).
 
 ## Fases
 
@@ -203,6 +223,10 @@ forma simples quando fizer sentido.
   (`setCloudProvider`, `syncNow`, `db`) para o Playwright.
 - `src/lib/discogs.ts` (fila de 25/min, 429 com Retry-After) e
   `src/lib/pricing.ts` (resolução master → edição em vinil → preço/raridade).
+- `src/lib/barcode.ts` — busca por código (`lookupCode`) e registro da edição
+  (`registerEdition`, `setEditionOwned`, `removeEdition`);
+  `components/BarcodeScanner.tsx` — câmera + leitor; `pages/ScanPage.tsx` —
+  rota `/escanear`. A página do álbum lista "Edições que encontrei".
 - `vite.config.ts` — plugin PWA; capas externas ficam em cache (CacheFirst)
   para funcionar offline. ATENÇÃO: o cache é restrito a
   `request.destination === 'image'`; nunca incluir domínios de API na regra,

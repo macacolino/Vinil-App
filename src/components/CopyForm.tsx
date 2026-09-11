@@ -30,6 +30,8 @@ export function CopyForm({ initial, onSave, onCancel }: Props) {
   const [pressingYear, setPressingYear] = useState(initial?.pressingYear != null ? String(initial.pressingYear) : '')
   const [pressingCountry, setPressingCountry] = useState(initial?.pressingCountry ?? '')
   const [pressingLabel, setPressingLabel] = useState(initial?.pressingLabel ?? '')
+  const [catalogNumber, setCatalogNumber] = useState(initial?.catalogNumber ?? '')
+  const [barcode, setBarcode] = useState(initial?.barcode ?? '')
   const [media, setMedia] = useState<Grade | ''>(initial?.mediaCondition ?? '')
   const [sleeve, setSleeve] = useState<Grade | ''>(initial?.sleeveCondition ?? '')
   const [pricePaid, setPricePaid] = useState(initial?.pricePaidBrl != null ? String(initial.pricePaidBrl).replace('.', ',') : '')
@@ -47,6 +49,8 @@ export function CopyForm({ initial, onSave, onCancel }: Props) {
         pressingYear: parseInteger(pressingYear),
         pressingCountry: pressingCountry.trim() || undefined,
         pressingLabel: pressingLabel.trim() || undefined,
+        catalogNumber: catalogNumber.trim() || undefined,
+        barcode: barcode.replace(/[\s-]/g, '') || undefined,
         mediaCondition: media || undefined,
         sleeveCondition: sleeve || undefined,
         pricePaidBrl: parseMoney(pricePaid),
@@ -75,6 +79,16 @@ export function CopyForm({ initial, onSave, onCancel }: Props) {
       <div className="field">
         <label htmlFor="copy-label">Gravadora da edição</label>
         <input id="copy-label" value={pressingLabel} onChange={(e) => setPressingLabel(e.target.value)} placeholder="ex.: EMI-Odeon" />
+      </div>
+      <div className="row">
+        <div className="field">
+          <label htmlFor="copy-catno">Nº de catálogo</label>
+          <input id="copy-catno" value={catalogNumber} onChange={(e) => setCatalogNumber(e.target.value)} placeholder="ex.: EMC 3357" />
+        </div>
+        <div className="field">
+          <label htmlFor="copy-barcode">Código de barras</label>
+          <input id="copy-barcode" inputMode="numeric" value={barcode} onChange={(e) => setBarcode(e.target.value)} placeholder="ex.: 825646252428" />
+        </div>
       </div>
       <div className="row">
         <GradeSelect id="copy-media" label="Condição do disco" value={media} onChange={setMedia} />

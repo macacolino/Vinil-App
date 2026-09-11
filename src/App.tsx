@@ -5,6 +5,7 @@ import { AlbumPage } from './pages/AlbumPage'
 import { ArtistPage } from './pages/ArtistPage'
 import { ArtistsPage } from './pages/ArtistsPage'
 import { LibraryPage } from './pages/LibraryPage'
+import { ScanPage } from './pages/ScanPage'
 import { SettingsPage } from './pages/SettingsPage'
 import { resumePendingJobs } from './lib/jobs'
 import { startSync } from './lib/sync'
@@ -22,6 +23,7 @@ export default function App() {
         <Route path="/artistas/:id" element={<ArtistPage />} />
         <Route path="/albuns/:id" element={<AlbumPage />} />
         <Route path="/biblioteca" element={<LibraryPage />} />
+        <Route path="/escanear" element={<ScanPage />} />
         <Route path="/configuracoes" element={<SettingsPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>
