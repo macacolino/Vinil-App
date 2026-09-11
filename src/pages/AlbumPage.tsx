@@ -123,6 +123,8 @@ export function AlbumPage() {
 
   const priceUsd = album.estimatedPriceUsd
   const priceBrl = priceUsd != null ? priceUsd * rate : undefined
+  // Edição escaneada/anotada que está servindo de referência de preço e raridade.
+  const refEdition = album.discogsReleaseId ? album.editions?.find((e) => e.discogsReleaseId === album.discogsReleaseId) : undefined
 
   return (
     <>
@@ -199,6 +201,13 @@ export function AlbumPage() {
                     <a href={releaseUrl(album.discogsReleaseId)} target="_blank" rel="noreferrer" style={{ textDecoration: 'underline' }}>
                       {album.discogsBlocked ? 'edição bloqueada para venda' : `${album.discogsForSale ?? 0} à venda`}
                     </a>
+                    {refEdition && (
+                      <span className="muted">
+                        {' · '}
+                        {refEdition.owned ? 'sua edição' : 'edição que você viu'}
+                        {refEdition.year || refEdition.country ? ` (${[refEdition.year, refEdition.country].filter(Boolean).join(' · ')})` : ''}
+                      </span>
+                    )}
                     <span className="muted">
                       {album.discogsInCollection != null ? ` · ${album.discogsInCollection.toLocaleString('pt-BR')} coleções` : ''}
                       {album.discogsCheckedAt ? ` · ${formatDate(new Date(album.discogsCheckedAt).toISOString().slice(0, 10))}` : ''}
@@ -243,6 +252,9 @@ export function AlbumPage() {
             <div className="card">
               <h2>Qual é este disco no Discogs?</h2>
               <p className="muted" style={{ marginBottom: 10 }}>
+                {refEdition
+                  ? 'Este álbum já usa uma edição escaneada como referência; a página escolhida aqui só vale se você remover as edições. '
+                  : ''}
                 Escolha a página certa (a mais colecionada costuma ser a principal). Preço, raridade e capa de reserva
                 passam a vir dela.
               </p>
@@ -351,6 +363,7 @@ export function AlbumPage() {
                         <div className="title">
                           <span>{[e.year, e.country].filter(Boolean).join(' · ') || 'Edição'}</span>
                           <span className={`badge${e.owned ? ' have' : ''}`}>{e.owned ? 'tenho' : 'vista'}</span>
+                          {e.key === refEdition?.key && <span className="badge type">referência de preço</span>}
                         </div>
                         <div className="meta">{[e.label, e.catalogNumber, e.format].filter(Boolean).join(' · ')}</div>
                         <div className="meta">

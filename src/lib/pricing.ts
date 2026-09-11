@@ -11,7 +11,7 @@
  * nunca são sobrescritos.
  */
 import { db } from '../db/db'
-import type { Album, Artist } from '../db/types'
+import type { Album, AlbumEdition, Artist } from '../db/types'
 import { DiscogsError, fetchArtistImage, fetchReleaseImage, fetchStats, fetchVinylVersions, searchArtist, searchMasters, type MasterCandidate } from './discogs'
 import { fetchArtistDiscogsId, fetchDiscogsMasterId, type Priority } from './musicbrainz'
 
@@ -21,7 +21,7 @@ export const PRICING_TTL_MS = 30 * 24 * 60 * 60 * 1000
 export const PRICING_ALGO = 3
 
 export function needsPricing(album: Album): boolean {
-  if (!album.mbid && !album.discogsMasterId) return false
+  if (!album.mbid && !album.discogsMasterId && !pickReferenceEdition(album)) return false
   if (!album.discogsCheckedAt || album.discogsAlgo !== PRICING_ALGO) return true
   return Date.now() - album.discogsCheckedAt > PRICING_TTL_MS
 }
@@ -117,6 +117,70 @@ export interface PricingResult {
 /** Consultas em andamento por álbum: a tela do álbum e a tarefa em segundo plano não repetem o trabalho. */
 const inFlight = new Map<number, Promise<PricingResult>>()
 
+/**
+ * Edição escaneada/anotada que serve de referência de preço e raridade: a
+ * mais barata entre as que têm preço; sem preço, a que o usuário tem; depois
+ * a mais colecionada. null quando o álbum não tem edição com id no Discogs.
+ */
+export function pickReferenceEdition(album: Album): AlbumEdition | null {
+  const withId = (album.editions ?? []).filter((e) => e.discogsReleaseId)
+  if (!withId.length) return null
+  return [...withId].sort((a, b) => {
+    const pa = a.lowestUsd ?? Number.POSITIVE_INFINITY
+    const pb = b.lowestUsd ?? Number.POSITIVE_INFINITY
+    if (pa !== pb) return pa - pb
+    if (a.owned !== b.owned) return a.owned ? -1 : 1
+    return (b.inCollection ?? 0) - (a.inCollection ?? 0)
+  })[0]
+}
+
+/** Campos do álbum que passam a refletir a edição de referência (sem consultar a rede). */
+function patchFromEdition(album: Album, e: AlbumEdition, now: number): Partial<Album> {
+  const inCollection = e.inCollection ?? (album.discogsReleaseId === e.discogsReleaseId ? album.discogsInCollection : undefined) ?? 0
+  const forSale = e.forSale ?? null
+  const patch: Partial<Album> = {
+    discogsMasterId: e.discogsMasterId ?? album.discogsMasterId,
+    discogsReleaseId: e.discogsReleaseId,
+    discogsInCollection: inCollection,
+    discogsForSale: e.forSale,
+    discogsBlocked: false,
+    discogsCheckedAt: e.priceCheckedAt ?? now,
+    discogsAlgo: PRICING_ALGO,
+  }
+  if (album.priceSource !== 'manual' && e.lowestUsd != null) {
+    patch.estimatedPriceUsd = Math.round(e.lowestUsd * 100) / 100
+    patch.priceSource = 'discogs'
+  }
+  if (album.raritySource !== 'manual') {
+    patch.rarity = rarityFromDiscogs(inCollection, forSale, e.lowestUsd)
+    patch.raritySource = 'discogs'
+  }
+  if (album.discogsReleaseId !== e.discogsReleaseId) {
+    patch.discogsCoverUrl = undefined
+    patch.discogsCoverCheckedAt = undefined
+  }
+  if (!album.discogsThumb && e.thumb) patch.discogsThumb = e.thumb
+  return patch
+}
+
+/**
+ * Depois de registrar/remover uma edição: se sobrou alguma com id no
+ * Discogs, o álbum passa a mostrar o preço e a raridade dela (a mais
+ * barata). Se não sobrou nenhuma, volta para a regra geral (edição mais
+ * colecionada do master) na próxima consulta.
+ */
+export async function applyEditionPricing(albumId: number): Promise<void> {
+  const album = await db.albums.get(albumId)
+  if (!album) return
+  const ref = pickReferenceEdition(album)
+  if (ref) {
+    await db.albums.update(albumId, patchFromEdition(album, ref, Date.now()))
+  } else if (album.discogsReleaseId && (album.editions ?? []).length === 0 && album.discogsCheckedAt) {
+    // A referência era uma edição que foi removida: força a reconsulta.
+    await db.albums.update(albumId, { discogsCheckedAt: undefined })
+  }
+}
+
 /** Consulta o Discogs e grava preço/raridade no álbum. */
 export function updateAlbumPricing(album: Album, artistName: string, priority: Priority = 'high'): Promise<PricingResult> {
   if (!album.id) return Promise.resolve({ found: false })
@@ -129,6 +193,19 @@ export function updateAlbumPricing(album: Album, artistName: string, priority: P
 
 async function doUpdateAlbumPricing(album: Album, artistName: string, priority: Priority): Promise<PricingResult> {
   const now = Date.now()
+
+  // 0) Edição escaneada/anotada manda: atualiza o preço dela e usa como referência.
+  const own = pickReferenceEdition(album)
+  if (own?.discogsReleaseId) {
+    const stats = await fetchStats(own.discogsReleaseId, priority)
+    const refreshed: AlbumEdition = { ...own, lowestUsd: stats.lowestUsd, forSale: stats.numForSale, priceCheckedAt: now }
+    const editions = (album.editions ?? []).map((e) => (e.key === own.key ? refreshed : e))
+    const updated = { ...album, editions }
+    // Com o preço novo, a mais barata pode ser outra.
+    const ref = pickReferenceEdition(updated) ?? refreshed
+    await db.albums.update(album.id!, { editions, ...patchFromEdition(album, ref, now) })
+    return { found: true, lowestUsd: ref.lowestUsd, forSale: ref.forSale, inCollection: ref.inCollection }
+  }
 
   // 1) master: escolhido pelo usuário > busca do Discogs > link do MusicBrainz.
   let masterId: number | null = album.discogsMasterSource === 'manual' ? (album.discogsMasterId ?? null) : null

@@ -90,6 +90,12 @@ forma simples quando fizer sentido.
    `marketplace/stats`) marcada como "tenho" ou "vista", e no "tenho" marca
    o álbum e preenche a cópia (ano/país/gravadora/catálogo/código). Só as
    edições escaneadas são guardadas, nunca todas as versões do Discogs.
+   **Preço e raridade do álbum passam a vir da edição escaneada** (a mais
+   barata, se houver mais de uma; `pickReferenceEdition` em `pricing.ts`),
+   em vez da edição mais colecionada do master; `applyEditionPricing` roda
+   ao registrar/remover, e `updateAlbumPricing` reconsulta só essa edição.
+   Sem edições, volta à regra geral. Várias prensagens compartilham o mesmo
+   código de barras: "já registrada" só bate pelo id da edição no Discogs.
    Decisões: edições ficam DENTRO do álbum (JSON) para sincronizar sem mudar
    o esquema do Supabase nem a versão do Dexie. Busca: Discogs
    `database/search?type=release&barcode=` (primeiro `format=Vinyl`, depois

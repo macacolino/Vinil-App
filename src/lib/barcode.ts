@@ -21,6 +21,7 @@ import {
 import { createAlbumFromMaster, createArtistFromMusicBrainz, DEFAULT_IMPORTED_RARITY } from './importArtist'
 import { enqueueImport } from './jobs'
 import { coverArtUrl, searchArtists, searchReleasesByCode as mbSearch, type MBReleaseHit } from './musicbrainz'
+import { applyEditionPricing } from './pricing'
 
 export type CodeKind = 'barcode' | 'catno'
 
@@ -211,10 +212,14 @@ export async function loadLocalEditions(): Promise<Map<string, LocalEdition>> {
 export function findLocalEdition(index: Map<string, LocalEdition>, candidate: EditionCandidate, code?: string, kind?: CodeKind): LocalEdition | undefined {
   const byKey = index.get(candidate.key)
   if (byKey) return byKey
+  // Pelo código de barras só quando um dos lados não tem id de edição no
+  // Discogs (ex.: registrada pelo MusicBrainz): várias prensagens de países
+  // diferentes compartilham o mesmo código e são edições distintas.
   if (kind === 'barcode' && code) {
     for (const v of barcodeVariants(code)) {
       const hit = index.get(`bc-${v}`)
-      if (hit && norm(hit.album.title) === norm(candidate.title)) return hit
+      if (!hit || norm(hit.album.title) !== norm(candidate.title)) continue
+      if (!hit.edition.discogsReleaseId || !candidate.discogs) return hit
     }
   }
   return undefined
@@ -432,6 +437,9 @@ export async function registerEdition(candidate: EditionCandidate, opts: Registe
     else await db.copies.add({ ...fill, uid: copyUid(album.uid), albumId: album.id!, createdAt: now, updatedAt: now })
   }
 
+  // A edição registrada vira a referência de preço/raridade do álbum (a mais barata, se houver várias).
+  await applyEditionPricing(album.id!)
+
   return { artist, album: (await db.albums.get(album.id!))!, edition, newArtist, newAlbum, importing }
 }
 
@@ -457,6 +465,7 @@ export async function setEditionOwned(albumId: number, key: string, owned: boole
     if (copy?.id) await db.copies.update(copy.id, { ...fill, updatedAt: now })
     else await db.copies.add({ ...fill, uid: copyUid(album.uid), albumId, createdAt: now, updatedAt: now })
   }
+  await applyEditionPricing(albumId)
 }
 
 /** Remove uma edição anotada do álbum. */
@@ -464,4 +473,5 @@ export async function removeEdition(albumId: number, key: string) {
   const album = await db.albums.get(albumId)
   if (!album) return
   await db.albums.update(albumId, { editions: (album.editions ?? []).filter((e) => e.key !== key), updatedAt: Date.now() })
+  await applyEditionPricing(albumId)
 }
