@@ -176,6 +176,13 @@ forma simples quando fizer sentido.
 - A prévia publicada como Artifact (build com `VITE_STATIC_DEMO=1`) não tem
   acesso à internet: a busca de artistas mostra um aviso nela. Só funciona
   no app publicado de verdade (fase 4).
+- O plano gratuito do Supabase pausa projetos sem atividade por 7 dias
+  (veio o aviso por e-mail). `.github/workflows/keepalive-supabase.yml` faz
+  uma leitura leve via REST + uma chamada de auth todo dia às 06:00 UTC, com
+  a chave anon do secret. Agendamentos (cron) e "Run workflow" só funcionam
+  para workflows que estão na `main`, por isso a `main` foi espelhada. O
+  GitHub desliga crons de repositórios sem commits por 60 dias: se isso
+  acontecer, basta reativar na aba Actions.
 - Nuvem ativa: esquema aplicado, "Confirm email" desligado, cadastro aberto.
   Para recriar em outro projeto: rodar `supabase/schema.sql` no SQL Editor,
   desligar "Confirm email", pôr a URL do app em Site URL e colocar a chave
