@@ -1,0 +1,35 @@
+# Mantém o projeto Supabase "ativo": o plano gratuito pausa projetos sem
+# atividade por 7 dias. Uma consulta leve por dia na API basta.
+# Roda todo dia às 06:00 UTC (03:00 em Brasília) e também à mão, pela aba
+# Actions → "Manter Supabase ativo" → "Run workflow".
+name: Manter Supabase ativo
+
+on:
+  schedule:
+    - cron: '0 6 * * *'
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Consulta leve na API do Supabase
+        env:
+          SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+          # Endereço fixo do projeto (o secret VITE_SUPABASE_URL guarda a URL do site, não do Supabase).
+          SUPABASE_URL: https://lxaqiarpkixiakicpysn.supabase.co
+        run: |
+          set -e
+          if [ -z "$SUPABASE_ANON_KEY" ]; then
+            echo "Secret VITE_SUPABASE_ANON_KEY não configurado." >&2
+            exit 1
+          fi
+          # Uma leitura (com RLS devolve lista vazia, mas passa pelo banco e conta como atividade)
+          # e uma chamada de autenticação, para os dois serviços registrarem uso.
+          code=$(curl -sS -o /tmp/resp.json -w '%{http_code}' \
+            -H "apikey: $SUPABASE_ANON_KEY" -H "Authorization: Bearer $SUPABASE_ANON_KEY" \
+            "$SUPABASE_URL/rest/v1/settings?select=uid&limit=1")
+          echo "REST: HTTP $code, resposta: $(cat /tmp/resp.json)"
+          auth=$(curl -sS -o /dev/null -w '%{http_code}' -H "apikey: $SUPABASE_ANON_KEY" "$SUPABASE_URL/auth/v1/settings")
+          echo "Auth: HTTP $auth"
+          [ "$code" = "200" ] && [ "$auth" = "200" ]
