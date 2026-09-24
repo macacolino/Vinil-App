@@ -45,3 +45,24 @@ begin
     execute format('create policy "dono" on public.%I for all to authenticated using (user_id = auth.uid()) with check (user_id = auth.uid())', t);
   end loop;
 end $$;
+
+-- ---------------------------------------------------------------------------
+-- Keep-alive: o plano gratuito pausa projetos "sem atividade" por 7 dias, e uma
+-- simples leitura com a chave anon não bastou. A função abaixo faz uma
+-- gravação real (atualiza um carimbo de data) e pode ser chamada pela chave
+-- anon via POST /rest/v1/rpc/keepalive. A tabela tem RLS ligada e nenhuma
+-- política: só a função (security definer) consegue mexer nela.
+create table if not exists public.keepalive (
+  id        int primary key,
+  pinged_at timestamptz not null default now(),
+  pings     bigint not null default 0
+);
+insert into public.keepalive (id) values (1) on conflict do nothing;
+alter table public.keepalive enable row level security;
+
+create or replace function public.keepalive() returns timestamptz
+language sql security definer set search_path = public as $$
+  update public.keepalive set pinged_at = now(), pings = pings + 1 where id = 1 returning pinged_at;
+$$;
+revoke all on function public.keepalive() from public;
+grant execute on function public.keepalive() to anon, authenticated;
