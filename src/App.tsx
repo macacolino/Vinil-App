@@ -8,13 +8,13 @@ import { LibraryPage } from './pages/LibraryPage'
 import { ScanPage } from './pages/ScanPage'
 import { SettingsPage } from './pages/SettingsPage'
 import { resumePendingJobs } from './lib/jobs'
-import { startSync } from './lib/sync'
+import { repairOwnership, startSync } from './lib/sync'
 
 export default function App() {
   // Retoma importações e buscas de faixas interrompidas (app fechado no meio).
   useEffect(() => {
+    void repairOwnership().then(() => startSync())
     void resumePendingJobs()
-    void startSync()
   }, [])
   return (
     <Routes>

@@ -20,7 +20,19 @@ forma simples quando fizer sentido.
   `VITE_SUPABASE_ANON_KEY`); nunca em arquivo commitado. Login por e-mail e
   senha (sem provedores sociais, para não exigir configuração extra).
 - **Sincronização**: "último a gravar ganha" por registro, comparando
-  `updatedAt` (relógio do aparelho). Cada registro tem um `uid` global e
+  `updatedAt` (relógio do aparelho), MAS os campos do usuário (status
+  tenho/quero, notas, edições escaneadas, título/ano/tipo/gravadora, master
+  manual, raridade/preço/foto quando manuais; lista `USER_FIELDS` em
+  `sync.ts`) seguem o `userUpdatedAt`, carimbado pelo middleware do Dexie só
+  em gravações do usuário. Tarefas automáticas (faixas, preços, capas, fotos,
+  revisão de discografia) gravam dentro de `metaTransaction` (`db.ts`), que
+  NÃO mexe no `userUpdatedAt`. Motivo: incidente real (set/2026) em que a
+  nuvem ficou pausada uma semana, o usuário marcou discos como "tenho" no
+  celular e a tarefa de preços no PC (que bumpa `updatedAt`) sobrescreveu 3
+  deles ao sincronizar. `applyRow` mescla os dois lados e a rodada faz pull
+  ANTES do push, para a linha mesclada subir na hora. `repairOwnership`
+  (roda ao abrir o app) devolve a "tenho" álbuns que têm cópia cadastrada ou
+  edição escaneada como "minha". Cada registro tem um `uid` global e
   determinístico (`db/uid.ts`: `mb-<mbid>` para o que vem do MusicBrainz,
   slug de nome/título+ano para o manual), então o mesmo álbum em dois
   aparelhos nunca duplica. Toda gravação local marca `dirty = 1` via

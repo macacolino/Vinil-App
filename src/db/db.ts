@@ -111,12 +111,18 @@ export class VinilDB extends Dexie {
           return {
             ...table,
             mutate: (req) => {
-              const tx = Dexie.currentTransaction as (Transaction & { fromSync?: boolean }) | null
+              // Gravações do próprio usuário (marcar "tenho", editar, escanear…)
+              // também recebem userUpdatedAt; tarefas automáticas (faixas, preços,
+              // capas) usam metaTransaction e NÃO mexem nele, para uma atualização
+              // de preço num aparelho nunca sobrescrever um "tenho" marcado no outro.
+              const tx = Dexie.currentTransaction as (Transaction & { fromSync?: boolean; metaOnly?: boolean }) | null
               if (!tx?.fromSync && (req.type === 'add' || req.type === 'put')) {
                 const now = Date.now()
+                const userTable = name === 'artists' || name === 'albums' || name === 'copies'
                 for (const v of req.values as Record<string, unknown>[]) {
                   v.dirty = 1
                   v.updatedAt = now
+                  if (userTable && !tx?.metaOnly) v.userUpdatedAt = now
                 }
                 notifyLocalChange()
               }
@@ -152,6 +158,17 @@ function notifyLocalChange() {
 export function syncTransaction<T>(tables: Dexie.Table[], fn: () => Promise<T>): Promise<T> {
   return db.transaction('rw', tables, async () => {
     ;(Dexie.currentTransaction as Transaction & { fromSync?: boolean }).fromSync = true
+    return fn()
+  })
+}
+
+/**
+ * Transação de tarefa automática (faixas, preços, capas, fotos): grava
+ * normalmente (dirty + updatedAt), mas sem carimbar userUpdatedAt.
+ */
+export function metaTransaction<T>(tables: Dexie.Table[], fn: () => Promise<T>): Promise<T> {
+  return db.transaction('rw', tables, async () => {
+    ;(Dexie.currentTransaction as Transaction & { metaOnly?: boolean }).metaOnly = true
     return fn()
   })
 }

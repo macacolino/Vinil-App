@@ -1,13 +1,14 @@
 /**
- * Sincronização com a nuvem (Supabase), no estilo "último a gravar ganha":
- *  1. envia o que mudou aqui (dirty = 1) e as exclusões (tombstones);
- *  2. baixa o que mudou no servidor desde a última vez e aplica localmente
+ * Sincronização com a nuvem (Supabase), no estilo "último a gravar ganha"
+ * (metadados pelo updatedAt; campos do usuário pelo userUpdatedAt):
+ *  1. baixa o que mudou no servidor desde a última vez e aplica localmente;
+ *  2. envia o que mudou aqui (dirty = 1) e as exclusões (tombstones)
  *     quando for mais novo que a cópia local.
  * Roda ao entrar, ao voltar a ficar online, alguns segundos depois de cada
  * alteração local e pelo botão "Sincronizar agora".
  */
 import { useSyncExternalStore } from 'react'
-import { db, onLocalChange, syncTransaction } from '../db/db'
+import { db, metaTransaction, onLocalChange, syncTransaction } from '../db/db'
 import type { Album, Artist, Copy, Setting, SyncTable } from '../db/types'
 import { getCloud, type CloudProvider, type CloudRow, type CloudUser } from './cloud'
 
@@ -260,8 +261,42 @@ async function pull(cloud: CloudProvider) {
   })
 }
 
+/**
+ * Campos que só o usuário altera. Numa disputa entre aparelhos, eles seguem
+ * quem tem o userUpdatedAt mais novo, e não o updatedAt: as tarefas
+ * automáticas (faixas, preços, capas) mexem em updatedAt o tempo todo e, sem
+ * isso, uma atualização de preço no PC apagava um "tenho" marcado no celular
+ * (aconteceu de verdade: 18 discos viraram 15 depois de uma pausa da nuvem).
+ */
+const USER_FIELDS: Record<string, string[]> = {
+  albums: ['status', 'notes', 'editions', 'title', 'year', 'type', 'label', 'discogsMasterId', 'discogsMasterSource'],
+  artists: ['name', 'country', 'countryCode', 'notes'],
+}
+
+/** Copia os campos do usuário de `from` para `into` (inclusive preço/raridade/foto quando manuais). */
+function copyUserFields(table: string, from: Record<string, unknown>, into: Record<string, unknown>) {
+  for (const f of USER_FIELDS[table] ?? []) if (f in from) into[f] = from[f]
+  if (table === 'albums') {
+    const a = from as Partial<Album>
+    if (a.raritySource === 'manual') Object.assign(into, { rarity: a.rarity, raritySource: 'manual' })
+    if (a.priceSource === 'manual') Object.assign(into, { estimatedPriceUsd: a.estimatedPriceUsd, priceSource: 'manual' })
+  }
+  if (table === 'artists') {
+    const ar = from as Partial<Artist>
+    if (ar.imageSource === 'manual') Object.assign(into, { imageUrl: ar.imageUrl, imageSource: 'manual' })
+  }
+  into.userUpdatedAt = from.userUpdatedAt
+}
+
+/**
+ * Aplica uma linha da nuvem. Metadados seguem o updatedAt mais novo; os campos
+ * do usuário seguem o userUpdatedAt mais novo. Quando os dois lados vencem em
+ * coisas diferentes, o resultado mesclado fica dirty e volta para a nuvem no
+ * push (que roda logo depois do pull).
+ */
 async function applyRow<T extends LocalRow>(
   table: {
+    name: string
     where: (index: string) => { equals: (v: string) => { first: () => Promise<T | undefined> } }
     put: (row: T) => Promise<unknown>
   },
@@ -269,10 +304,44 @@ async function applyRow<T extends LocalRow>(
   extra: Partial<T>,
 ) {
   const local = await table.where('uid').equals(row.uid).first()
-  if (local && local.updatedAt >= row.updated_at) return
-  const merged = { ...(row.data as unknown as T), ...extra, uid: row.uid, dirty: 0 } as T
-  if (local) merged.id = local.id
-  await table.put(merged)
+  const remote = { ...(row.data as unknown as T), ...extra, uid: row.uid, dirty: 0 } as T
+  if (!local) {
+    await table.put(remote)
+    return
+  }
+  const hasUserFields = table.name in USER_FIELDS
+  const localUser = local.userUpdatedAt ?? 0
+  const remoteUser = (row.data.userUpdatedAt as number | undefined) ?? 0
+  if (local.updatedAt >= row.updated_at) {
+    // Metadados locais mais novos. Só há o que fazer se a nuvem trouxer uma
+    // alteração do usuário mais recente (feita no outro aparelho).
+    if (!hasUserFields || remoteUser <= localUser) return
+    const merged = { ...local, dirty: 1 } as T
+    copyUserFields(table.name, row.data, merged as unknown as Record<string, unknown>)
+    await table.put(merged)
+    return
+  }
+  remote.id = local.id
+  if (hasUserFields && localUser > remoteUser) {
+    // Nuvem com metadados mais novos, mas o usuário mexeu aqui depois: mantém
+    // o que ele fez por cima dos metadados novos e devolve à nuvem.
+    copyUserFields(table.name, local as unknown as Record<string, unknown>, remote as unknown as Record<string, unknown>)
+    remote.dirty = 1
+  }
+  await table.put(remote)
+}
+
+/**
+ * Álbum que tem cópia cadastrada ou edição escaneada como "minha" mas não
+ * está como "tenho": foi vítima da disputa acima antes da correção. Volta
+ * para "tenho" (como alteração do usuário, para vencer na sincronização).
+ */
+export async function repairOwnership(): Promise<number> {
+  const copies = await db.copies.toArray()
+  const withCopy = new Set(copies.map((c) => c.albumId))
+  const lost = (await db.albums.toArray()).filter((a) => a.status !== 'have' && (withCopy.has(a.id!) || a.editions?.some((e) => e.owned)))
+  for (const a of lost) await db.albums.update(a.id!, { status: 'have' })
+  return lost.length
 }
 
 /** Sincroniza agora (envia e depois baixa). Se já estiver rodando, repete ao terminar. */
@@ -291,8 +360,11 @@ export async function syncNow(): Promise<void> {
   clearTimeout(timer)
   set({ state: 'syncing', error: undefined })
   try {
-    await push(cloud)
+    // Primeiro baixa, depois envia: assim uma linha mesclada (metadados da
+    // nuvem + alteração do usuário local) sobe já nesta rodada, e um push
+    // nunca atropela na nuvem uma alteração que ainda não tínhamos visto.
     await pull(cloud)
+    await push(cloud)
     const now = Date.now()
     await syncTransaction([db.settings], async () => {
       await db.settings.put({ key: LAST_SYNC_KEY, value: now, dirty: 0 })
@@ -320,13 +392,25 @@ declare global {
       pricing?: Record<string, unknown>
       barcode?: Record<string, unknown>
       decodeImage?: (url: string) => Promise<string | null>
+      metaTransaction?: typeof metaTransaction
+      repairOwnership?: typeof repairOwnership
     }
   }
 }
 if (import.meta.env.VITE_TEST_HOOKS === '1') {
   Promise.all([import('./cloud'), import('./pricing'), import('./barcode'), import('../components/BarcodeScanner')]).then(
     ([{ setCloudProvider }, pricing, barcode, scanner]) => {
-      window.__vinil = { setCloudProvider, syncNow, db, syncStatus: () => status, pricing: { ...pricing }, barcode: { ...barcode }, decodeImage: scanner.decodeImage }
+      window.__vinil = {
+        setCloudProvider,
+        syncNow,
+        db,
+        syncStatus: () => status,
+        pricing: { ...pricing },
+        barcode: { ...barcode },
+        decodeImage: scanner.decodeImage,
+        metaTransaction,
+        repairOwnership,
+      }
     },
   )
 }

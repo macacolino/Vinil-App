@@ -10,7 +10,7 @@
  * Valores definidos à mão pelo usuário (priceSource/raritySource = manual)
  * nunca são sobrescritos.
  */
-import { db } from '../db/db'
+import { db, metaTransaction } from '../db/db'
 import type { Album, AlbumEdition, Artist } from '../db/types'
 import { DiscogsError, fetchArtistImage, fetchReleaseImage, fetchStats, fetchVinylVersions, searchArtist, searchMasters, type MasterCandidate } from './discogs'
 import { fetchArtistDiscogsId, fetchDiscogsMasterId, type Priority } from './musicbrainz'
@@ -47,7 +47,7 @@ export async function updateAlbumCover(album: Album, priority: Priority = 'high'
     // Sem capa nenhuma (ou só a miniatura): a do Discogs vira a principal.
     if (!album.coverUrl || album.coverUrl === album.discogsThumb) patch.coverUrl = url
   }
-  await db.albums.update(album.id, patch)
+  await metaTransaction([db.albums], () => db.albums.update(album.id!, patch))
   return url
 }
 
@@ -173,12 +173,14 @@ export async function applyEditionPricing(albumId: number): Promise<void> {
   const album = await db.albums.get(albumId)
   if (!album) return
   const ref = pickReferenceEdition(album)
-  if (ref) {
-    await db.albums.update(albumId, patchFromEdition(album, ref, Date.now()))
-  } else if (album.discogsReleaseId && (album.editions ?? []).length === 0 && album.discogsCheckedAt) {
-    // A referência era uma edição que foi removida: força a reconsulta.
-    await db.albums.update(albumId, { discogsCheckedAt: undefined })
-  }
+  await metaTransaction([db.albums], async () => {
+    if (ref) {
+      await db.albums.update(albumId, patchFromEdition(album, ref, Date.now()))
+    } else if (album.discogsReleaseId && (album.editions ?? []).length === 0 && album.discogsCheckedAt) {
+      // A referência era uma edição que foi removida: força a reconsulta.
+      await db.albums.update(albumId, { discogsCheckedAt: undefined })
+    }
+  })
 }
 
 /** Consulta o Discogs e grava preço/raridade no álbum. */
@@ -203,7 +205,7 @@ async function doUpdateAlbumPricing(album: Album, artistName: string, priority: 
     const updated = { ...album, editions }
     // Com o preço novo, a mais barata pode ser outra.
     const ref = pickReferenceEdition(updated) ?? refreshed
-    await db.albums.update(album.id!, { editions, ...patchFromEdition(album, ref, now) })
+    await metaTransaction([db.albums], () => db.albums.update(album.id!, { editions, ...patchFromEdition(album, ref, now) }))
     return { found: true, lowestUsd: ref.lowestUsd, forSale: ref.forSale, inCollection: ref.inCollection }
   }
 
@@ -225,14 +227,15 @@ async function doUpdateAlbumPricing(album: Album, artistName: string, priority: 
   }
   if (!masterId) masterId = album.discogsMasterId ?? null
   if (!masterId) {
-    await db.albums.update(album.id, { discogsCheckedAt: now, discogsAlgo: PRICING_ALGO })
+    await metaTransaction([db.albums], () => db.albums.update(album.id!, { discogsCheckedAt: now, discogsAlgo: PRICING_ALGO }))
     return { found: false }
   }
 
   // 2) edição de referência: a mais colecionada em vinil que possa ser vendida.
   const versions = await fetchVinylVersions(masterId, priority)
   if (!versions.length) {
-    await db.albums.update(album.id, { discogsMasterId: masterId, discogsCheckedAt: now, discogsAlgo: PRICING_ALGO })
+    const mid = masterId
+    await metaTransaction([db.albums], () => db.albums.update(album.id!, { discogsMasterId: mid, discogsCheckedAt: now, discogsAlgo: PRICING_ALGO }))
     return { found: false }
   }
   let ref = versions[0]
@@ -273,7 +276,7 @@ async function doUpdateAlbumPricing(album: Album, artistName: string, priority: 
     patch.discogsCoverCheckedAt = undefined
   }
   if (!album.coverUrl && ref.thumb) patch.coverUrl = ref.thumb
-  await db.albums.update(album.id, patch)
+  await metaTransaction([db.albums], () => db.albums.update(album.id!, patch))
   return { found: true, lowestUsd: stats.lowestUsd, forSale: stats.numForSale, inCollection: ref.inCollection }
 }
 
@@ -297,7 +300,7 @@ export async function updateArtistImage(artist: Artist, priority: Priority = 'hi
     }
   }
   if (!discogsId) {
-    await db.artists.update(artist.id, { imageCheckedAt: now })
+    await metaTransaction([db.artists], () => db.artists.update(artist.id!, { imageCheckedAt: now }))
     return false
   }
   let url: string | null = null
@@ -306,10 +309,13 @@ export async function updateArtistImage(artist: Artist, priority: Priority = 'hi
   } catch (err) {
     if (!(err instanceof DiscogsError && err.kind === 'notfound')) throw err
   }
-  await db.artists.update(artist.id, {
-    discogsId,
-    imageCheckedAt: now,
-    ...(url ? { imageUrl: url, imageSource: 'discogs' as const } : {}),
-  })
+  const did = discogsId
+  await metaTransaction([db.artists], () =>
+    db.artists.update(artist.id!, {
+      discogsId: did,
+      imageCheckedAt: now,
+      ...(url ? { imageUrl: url, imageSource: 'discogs' as const } : {}),
+    }),
+  )
   return !!url
 }

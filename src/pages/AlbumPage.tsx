@@ -35,7 +35,8 @@ export function AlbumPage() {
 
   const album = useLiveQuery(() => db.albums.get(albumId), [albumId])
   const artist = useLiveQuery(() => (album ? db.artists.get(album.artistId) : undefined), [album?.artistId])
-  const copy = useLiveQuery(() => db.copies.where('albumId').equals(albumId).first(), [albumId])
+  // undefined = ainda carregando; null = não há cópia (o formulário espera o primeiro).
+  const copy = useLiveQuery(() => db.copies.where('albumId').equals(albumId).first().then((c) => c ?? null), [albumId])
 
   const shouldFetchTracks = !!album && needsTracks(album) && artist !== undefined
   const artistCountryCode = artist?.countryCode
@@ -91,7 +92,10 @@ export function AlbumPage() {
     if (album!.status === 'have' && status !== 'have' && hasCopyData) {
       if (!window.confirm('Isso apaga os dados da sua cópia (prensagem, condição, valor pago…). Continuar?')) return
     }
-    await db.albums.update(albumId, { status, updatedAt: Date.now() })
+    const patch: Partial<Album> = { status, updatedAt: Date.now() }
+    // Deixou de ter: nenhuma edição escaneada continua "minha".
+    if (status !== 'have' && album!.editions?.some((e) => e.owned)) patch.editions = album!.editions.map((e) => ({ ...e, owned: false }))
+    await db.albums.update(albumId, patch)
     if (status !== 'have') await deleteCopyForAlbum(albumId)
     if (status === 'have' && !copy) setEditingCopy(true)
   }

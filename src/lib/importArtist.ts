@@ -1,4 +1,4 @@
-import { db } from '../db/db'
+import { db, metaTransaction } from '../db/db'
 import type { Album, Artist } from '../db/types'
 import { albumUid, artistUid } from '../db/uid'
 import { fetchMasterDetails, type MasterCandidate } from './discogs'
@@ -68,7 +68,7 @@ export async function importDiscography(
     ? groups.filter((g) => !/^\d{4}-\d{2}-\d{2}/.test(g.title)) // sem dados de formato: tira ao menos os shows datados
     : groups.filter((g) => vinyl.has(g.id))
 
-  return db.transaction('rw', db.artists, db.albums, db.copies, db.tombstones, async () => {
+  return metaTransaction([db.artists, db.albums, db.copies, db.tombstones], async () => {
     const now = Date.now()
     await db.artists.update(artistId, { discographyReviewedAt: now, updatedAt: now })
     const existing = await db.albums.where('artistId').equals(artistId).toArray()
@@ -130,7 +130,7 @@ export async function loadAlbumTracks(album: Album, artistCountryCode?: string, 
   const patch: Partial<Album> = { tracksCheckedAt: Date.now(), updatedAt: Date.now() }
   if (result && result.tracks.length) patch.tracks = result.tracks
   if (result?.label && !album.label) patch.label = result.label
-  await db.albums.update(album.id, patch)
+  await metaTransaction([db.albums], () => db.albums.update(album.id!, patch))
   return result?.tracks.length ?? 0
 }
 

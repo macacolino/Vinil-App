@@ -21,6 +21,8 @@ export interface Artist {
   uid: string
   /** 1 = alterado neste aparelho e ainda não enviado à nuvem. */
   dirty?: number
+  /** Última alteração feita PELO USUÁRIO (não por tarefas automáticas); ver sync.ts. */
+  userUpdatedAt?: number
   name: string
   country?: string
   /** Código ISO do país (ex.: GB), usado para escolher a edição de referência. */
@@ -43,6 +45,7 @@ export interface Album {
   id?: number
   uid: string
   dirty?: number
+  userUpdatedAt?: number
   artistId: number
   title: string
   year: number
@@ -121,6 +124,7 @@ export interface Copy {
   id?: number
   uid: string
   dirty?: number
+  userUpdatedAt?: number
   albumId: number
   pressingYear?: number
   pressingCountry?: string

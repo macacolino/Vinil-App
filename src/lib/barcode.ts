@@ -7,7 +7,7 @@
  * artista e do álbum, para a discografia inteira ser importada como no
  * fluxo normal de "Novo artista").
  */
-import { db } from '../db/db'
+import { db, metaTransaction } from '../db/db'
 import { uniqueUid } from '../db/ops'
 import type { Album, AlbumEdition, Artist, Copy } from '../db/types'
 import { albumUid, artistUid, copyUid } from '../db/uid'
@@ -316,7 +316,9 @@ export async function registerEdition(candidate: EditionCandidate, opts: Registe
     }
     newArtist = true
   } else if (!artist.discogsId && details?.artists[0]?.id) {
-    await db.artists.update(artist.id!, { discogsId: details.artists[0].id, updatedAt: now })
+    const did = details.artists[0].id
+    const aid = artist.id!
+    await metaTransaction([db.artists], () => db.artists.update(aid, { discogsId: did, updatedAt: now }))
   }
 
   // 3) Álbum: pelo id do MusicBrainz, pelo master do Discogs ou pelo título.
@@ -382,7 +384,8 @@ export async function registerEdition(candidate: EditionCandidate, opts: Registe
     album = (await db.albums.get(albumId))!
     newAlbum = true
   } else if (masterId && !album.discogsMasterId) {
-    await db.albums.update(album.id!, { discogsMasterId: masterId, discogsMasterSource: 'auto', updatedAt: now })
+    const alid = album.id!
+    await metaTransaction([db.albums], () => db.albums.update(alid, { discogsMasterId: masterId, discogsMasterSource: 'auto', updatedAt: now }))
   }
 
   // 4) Preço da edição exata.
