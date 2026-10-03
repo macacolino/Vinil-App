@@ -191,10 +191,15 @@ forma simples quando fizer sentido.
 - O plano gratuito do Supabase pausa projetos sem atividade por 7 dias.
   Uma leitura vazia com a chave anon (GET em `settings`) rodou todo dia com
   HTTP 200 e MESMO ASSIM o projeto foi pausado (set/2026): leitura não conta
-  como atividade. Agora `.github/workflows/keepalive-supabase.yml` chama
-  `POST /rest/v1/rpc/keepalive` (função `security definer` em
-  `supabase/schema.sql` que atualiza a tabela `keepalive`, uma gravação
-  real) duas vezes por dia (06:00 e 18:00 UTC), com a chave anon do secret.
+  como atividade. Depois, um UPDATE da mesma linha 2x por dia (via RPC) rodou
+  uma semana e MESMO ASSIM veio novo aviso (out/2026). A documentação só diz
+  "alguns pedidos ao banco por dia". Agora `.github/workflows/keepalive-supabase.yml`
+  roda A CADA HORA e faz 3 pedidos: `POST /rest/v1/rpc/keepalive` (função
+  `security definer` em `supabase/schema.sql` que INSERE uma linha em
+  `keepalive_log`, mantendo as últimas 500), um GET nessa tabela (anon pode
+  ler) e uma chamada de auth, com a chave anon do secret. Se vier aviso de
+  novo, o próximo passo é abrir o painel (conta como atividade) e considerar
+  o plano Pro.
   Se o projeto for recriado/restaurado, a função precisa existir: colar o
   `schema.sql` inteiro (é idempotente) no SQL Editor. Agendamentos (cron) e
   "Run workflow" só funcionam para workflows que estão na `main`, por isso a

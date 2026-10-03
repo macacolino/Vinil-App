@@ -60,9 +60,30 @@ create table if not exists public.keepalive (
 insert into public.keepalive (id) values (1) on conflict do nothing;
 alter table public.keepalive enable row level security;
 
-create or replace function public.keepalive() returns timestamptz
-language sql security definer set search_path = public as $$
-  update public.keepalive set pinged_at = now(), pings = pings + 1 where id = 1 returning pinged_at;
+-- Histórico de pings: cada chamada INSERE uma linha nova (uma atualização da
+-- mesma linha, 2x por dia, ainda rendeu aviso de pausa em out/2026). A função
+-- apaga o que passar de 500 linhas. A chave anon pode LER esta tabela (mais
+-- uma consulta real por rodada); gravar, só pela função.
+create table if not exists public.keepalive_log (
+  id        bigserial primary key,
+  pinged_at timestamptz not null default now(),
+  source    text
+);
+alter table public.keepalive_log enable row level security;
+drop policy if exists "leitura" on public.keepalive_log;
+create policy "leitura" on public.keepalive_log for select to anon, authenticated using (true);
+
+create or replace function public.keepalive(source text default null) returns timestamptz
+language plpgsql security definer set search_path = public as $$
+declare t timestamptz;
+begin
+  update public.keepalive set pinged_at = now(), pings = pings + 1 where id = 1 returning pinged_at into t;
+  insert into public.keepalive_log (source) values (coalesce(source, 'rpc'));
+  delete from public.keepalive_log
+    where id not in (select id from public.keepalive_log order by id desc limit 500);
+  return t;
+end;
 $$;
-revoke all on function public.keepalive() from public;
-grant execute on function public.keepalive() to anon, authenticated;
+drop function if exists public.keepalive();
+revoke all on function public.keepalive(text) from public;
+grant execute on function public.keepalive(text) to anon, authenticated;

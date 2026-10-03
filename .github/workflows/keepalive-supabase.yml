@@ -1,20 +1,23 @@
-# Mantém o projeto Supabase "ativo": o plano gratuito pausa projetos sem
-# atividade por 7 dias. Uma leitura simples com a chave anon NÃO bastou (o
-# projeto foi pausado mesmo assim), então agora é feita uma gravação real,
-# pela função keepalive() definida em supabase/schema.sql, duas vezes por dia.
-# Também roda à mão: aba Actions → "Manter Supabase ativo" → "Run workflow".
+# Mantém o projeto Supabase "ativo": o plano gratuito pausa projetos "sem
+# atividade suficiente" por 7 dias. Histórico do que NÃO bastou:
+#   - uma leitura vazia por dia (set/2026): projeto pausado;
+#   - uma gravação (update da mesma linha) 2x por dia (set/out 2026): novo aviso.
+# A documentação só diz "alguns pedidos ao banco por dia". Agora roda a cada
+# hora e cada rodada faz 3 pedidos: INSERT de uma linha nova (pela função
+# keepalive() de supabase/schema.sql), uma leitura dessa tabela e uma chamada
+# de auth. Também roda à mão: aba Actions → "Manter Supabase ativo" → "Run workflow".
 name: Manter Supabase ativo
 
 on:
   schedule:
-    - cron: '0 6,18 * * *'
+    - cron: '23 * * * *'
   workflow_dispatch:
 
 jobs:
   ping:
     runs-on: ubuntu-latest
     steps:
-      - name: Gravação no banco via função keepalive()
+      - name: Gravação + leitura no banco
         env:
           SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
           # Endereço fixo do projeto (o secret VITE_SUPABASE_URL guarda a URL do site, não do Supabase).
@@ -25,19 +28,26 @@ jobs:
             echo "Secret VITE_SUPABASE_ANON_KEY não configurado." >&2
             exit 1
           fi
-          code=$(curl -sS -o /tmp/resp.txt -w '%{http_code}' -X POST \
-            -H "apikey: $SUPABASE_ANON_KEY" -H "Authorization: Bearer $SUPABASE_ANON_KEY" \
-            -H "Content-Type: application/json" -d '{}' \
+          H1="apikey: $SUPABASE_ANON_KEY"
+          H2="Authorization: Bearer $SUPABASE_ANON_KEY"
+          # 1) gravação: insere uma linha nova em keepalive_log
+          code=$(curl -sS -o /tmp/resp.txt -w '%{http_code}' -X POST -H "$H1" -H "$H2" \
+            -H "Content-Type: application/json" -d '{"source":"github-actions"}' \
             "$SUPABASE_URL/rest/v1/rpc/keepalive")
           echo "keepalive(): HTTP $code, resposta: $(cat /tmp/resp.txt)"
           if [ "$code" = "404" ]; then
-            echo "::error::A função keepalive() não existe no banco. Cole supabase/schema.sql no SQL Editor do Supabase e rode." >&2
+            echo "::error::A função keepalive(source) não existe no banco. Cole supabase/schema.sql no SQL Editor do Supabase e rode." >&2
             exit 1
           fi
           if [ "$code" != "200" ]; then
             echo "::error::O Supabase não respondeu 200. Se o projeto estiver pausado, restaure-o no painel (Restore project)." >&2
             exit 1
           fi
-          # Chamada de autenticação, para o serviço de auth também registrar uso.
-          auth=$(curl -sS -o /dev/null -w '%{http_code}' -H "apikey: $SUPABASE_ANON_KEY" "$SUPABASE_URL/auth/v1/settings")
+          # 2) leitura: últimas linhas gravadas
+          read=$(curl -sS -o /tmp/log.txt -w '%{http_code}' -H "$H1" -H "$H2" \
+            "$SUPABASE_URL/rest/v1/keepalive_log?select=id,pinged_at&order=id.desc&limit=3")
+          echo "leitura: HTTP $read, $(cat /tmp/log.txt)"
+          [ "$read" = "200" ]
+          # 3) auth, para esse serviço também registrar uso
+          auth=$(curl -sS -o /dev/null -w '%{http_code}' -H "$H1" "$SUPABASE_URL/auth/v1/settings")
           echo "Auth: HTTP $auth"
