@@ -36,8 +36,14 @@ jobs:
             "$SUPABASE_URL/rest/v1/rpc/keepalive")
           echo "keepalive(): HTTP $code, resposta: $(cat /tmp/resp.txt)"
           if [ "$code" = "404" ]; then
-            echo "::error::A função keepalive(source) não existe no banco. Cole supabase/schema.sql no SQL Editor do Supabase e rode." >&2
-            exit 1
+            # Banco ainda com a função antiga (schema.sql novo não aplicado): usa
+            # ela para não ficar sem gravação nenhuma (foi o que causou a pausa
+            # de 04/10/2026), e avisa no log.
+            echo "::warning::keepalive(source) não existe; usando a versão antiga. Aplique supabase/schema.sql no SQL Editor."
+            code=$(curl -sS -o /tmp/resp.txt -w '%{http_code}' -X POST -H "$H1" -H "$H2" \
+              -H "Content-Type: application/json" -d '{}' \
+              "$SUPABASE_URL/rest/v1/rpc/keepalive")
+            echo "keepalive() antiga: HTTP $code, resposta: $(cat /tmp/resp.txt)"
           fi
           if [ "$code" != "200" ]; then
             echo "::error::O Supabase não respondeu 200. Se o projeto estiver pausado, restaure-o no painel (Restore project)." >&2
@@ -47,7 +53,8 @@ jobs:
           read=$(curl -sS -o /tmp/log.txt -w '%{http_code}' -H "$H1" -H "$H2" \
             "$SUPABASE_URL/rest/v1/keepalive_log?select=id,pinged_at&order=id.desc&limit=3")
           echo "leitura: HTTP $read, $(cat /tmp/log.txt)"
-          [ "$read" = "200" ]
+          # Sem a tabela nova (schema antigo) a leitura dá 404: não é motivo para falhar.
+          [ "$read" = "200" ] || [ "$read" = "404" ]
           # 3) auth, para esse serviço também registrar uso
           auth=$(curl -sS -o /dev/null -w '%{http_code}' -H "$H1" "$SUPABASE_URL/auth/v1/settings")
           echo "Auth: HTTP $auth"
